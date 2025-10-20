@@ -220,11 +220,26 @@ if [[ "$body_exists" == "true" ]] || [[ "$json_exists" == "true" ]]; then
   )
 fi
 
+
+# now -- write to our history file
+HISTORY_FILE="${HOME}/.yapi_history"
+realpath_config=$(realpath "$config")
+base_yapi_cmd=$(which yapit 2>/dev/null || $0)
+
+command="$0 -c \"$realpath_config\""
+if [[ -n "$cli_url" ]]; then
+  command+=" -u \"$cli_url\""
+fi
+
+echo "$(date +%s) | $command" >> "$HISTORY_FILE"
+
 # Execute request and capture output
 #echo "Executing $method request to $full_url"
 #echo "Curl command: curl ${curl_args[*]}"
 echo "Executing $method request to $full_url" >&2
 response=$(curl -L "${curl_args[@]}")
+
+
 
 # Try to format as JSON if possible, otherwise print as-is
 if echo "$response" | jq . &>/dev/null; then
