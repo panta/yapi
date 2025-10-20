@@ -7,7 +7,7 @@ method: POST
 content_type: application/json
 
 body:
-  title: "Testing yapit - YAML API Testing Tool"
+  title: "Testing yapi - YAML API Testing Tool"
   description: "This demo shows nested objects, arrays, and various data types"
   userId: 123
   isPublished: true
@@ -16,9 +16,9 @@ body:
     - "api"
     - "yaml"
   metadata:
-    source: "yapit"
+    source: "yapi"
     version: "1.0"
     timestamp: "2024-01-15T10:30:00Z"
   author:
-    name: "BA"
+    name: "Test User"
     email: "test@example.com"
