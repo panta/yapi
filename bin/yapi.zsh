@@ -9,6 +9,8 @@ function yapi_zsh() {
   [ -f "$YAPI_HOME/yapi.sh" ] || return 1
 
   bash "$YAPI_HOME/yapi.sh" "$@"
+  success=$?
+  [ $success -ne 0 ] && return $success
 
   file="$HOME/.yapi_history"
   recent_line=$(tail -n 1 "$file")
