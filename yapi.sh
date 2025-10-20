@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 # yapit Yaml API Testing
 # requires: bash, curl, yq, fzf (optional, for interactive file selection)
 set -e
@@ -224,9 +224,16 @@ fi
 # now -- write to our history file
 HISTORY_FILE="${HOME}/.yapi_history"
 realpath_config=$(realpath "$config")
-base_yapi_cmd=$(which yapit 2>/dev/null || $0)
 
-command="$0 -c \"$realpath_config\""
+# TODO MAYBE FIX THIS SO FALLBACK WORKS
+# base_cmd=""
+# if yapi_alias_is_defined ; then
+base_cmd="yapi"
+# else
+#   base_cmd="$(realpath "$0")"
+# fi
+
+command="$base_cmd -c \"$realpath_config\""
 if [[ -n "$cli_url" ]]; then
   command+=" -u \"$cli_url\""
 fi
