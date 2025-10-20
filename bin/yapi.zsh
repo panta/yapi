@@ -1,4 +1,6 @@
-# zsh
+# The point of this file is that you can source this
+# and we'll be able to append to the zsh history correctly.
+# We can also generate the alias here.
 
 YAPI_HOME="${YAPI_HOME:-$HOME/.config/yapi}"
 alias yapi='yapi_zsh'
