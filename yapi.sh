@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 # yapit Yaml API Testing
 # requires: bash, curl, yq, fzf (optional, for interactive file selection)
 set -e
