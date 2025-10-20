@@ -17,22 +17,19 @@
 
 ```bash
 # Clone it somewhere
-git clone <your-repo-url> ~/.config/yapi
+git clone https://github.com/jamierpond/yapi ~/.config/yapi
 
-# Make it executable
-chmod +x ~/.config/yapi/yapi.sh
 ```
 
-### Add an Alias (Recommended)
+### Zsh Integration (Recommended)
+For enhanced zsh support, add the following to your `~/.zshrc`:
+This enables history appending and an alias for easy access.
 
-For the best experience, add an alias to your shell's config file (`~/.bashrc`, `~/.zshrc`, etc.). This lets you run `yapi` from any directory.
-
-```bash
-# Add this to your .bashrc or .zshrc
-alias yapi="~/.config/yapi/yapi.sh"
+```zsh
+YAPI_ZSH="$HOME/.config/yapi/bin/yapi.zsh"
+[ -f "$YAPI_ZSH" ] && source "$YAPI_ZSH"
+alias a="yapi"
 ```
-
-Now you can just run `yapi` from anywhere.
 
 ## Usage
 
