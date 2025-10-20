@@ -68,12 +68,12 @@ yapi -c create-post.yapi.yml
 ## How to Use It
 
 ```bash
+# Run with no args for the fzf-powered menu
+yapi
+
 # Run a specific file
-./yapi.sh -c examples/create-post.yapi.yml
+yapi -c examples/create-post.yapi.yml
 
 # Run against a different server (e.g., staging)
-./yapi.sh -c examples/create-post.yapi.yml -u http://localhost:3000
-
-# Run with no args for the fzf-powered menu
-./yapi.sh
+yapi -c examples/create-post.yapi.yml -u http://localhost:3000
 ```
