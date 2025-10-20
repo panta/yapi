@@ -86,14 +86,14 @@ if [[ -z "$config" ]]; then
     if [[ -z "$yaml_files" ]]; then
       error_exit "No YAML files found in directory tree"
     fi
-    config=$(echo "$yaml_files" | fzf  --preview 'cat {}' --prompt="Select config file: ")
+    config=$(echo "$yaml_files" | fzf  --preview 'yq {}' --prompt="Select config file: ")
   else
     # Search only git-tracked YAML files (default)
     yaml_files=$(git ls-files "*.$YAPI_EXTENSION.yaml" "*.$YAPI_EXTENSION.yml"  2>/dev/null)
     if [[ -z "$yaml_files" ]]; then
       error_exit "No git-tracked *.$YAPI_EXTENSION.[yaml|yml] files found. Use --all to search all files in directory tree."
     fi
-    config=$(echo "$yaml_files" | fzf --preview 'cat {}' --prompt="Select config file: ")
+    config=$(echo "$yaml_files" | fzf --preview 'yq {}' --prompt="Select config file: ")
   fi
 
   # Exit if user cancelled fzf
