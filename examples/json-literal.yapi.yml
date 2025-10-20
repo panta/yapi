@@ -9,7 +9,7 @@ content_type: application/json
 # or when copying JSON from other sources
 json: |
   {
-    "id": 123,
+    "id": "hi emily",
     "status": "active",
     "nested": {
       "foo": "bar"
