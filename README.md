@@ -1,101 +1,79 @@
-# yapi - YAML API Testing
+# yapi 🐏
 
-> Because writing curl commands by hand is so 2015.
+Tired of `curl` commands long enough to be a novel? Sick of waiting for Postman to load just to send one. simple. request?
 
-**yapi** is a dead-simple API testing tool using YAML files. Write API calls in YAML, run them with one command, get pretty JSON output. That's it.
+**Stop the madness.**
 
-## Why yapi?
+**yapi** is a tiny script that runs API requests from clean, simple YAML files. It's the fast, no-bloat, terminal-native alternative you've been dreaming of.
 
--   **No more `curl` archaeology:** Stop digging through bash history.
--   **Git-trackable:** API tests live in version control with your code.
--   **Simple & Fast:** If you can write YAML, you can test APIs. `fzf` integration for quick file picking.
--   **Pretty output:** Automatic `jq` formatting.
+-----
 
-## Installation & Setup
+## What's the Big Idea?
 
-**Requirements:** `bash`, `curl`, `yq`. Optional but recommended: `fzf`, `jq`.
+Instead of this mess:
 
 ```bash
-# Clone it somewhere
-git clone https://github.com/jamierpond/yapi ~/.config/yapi
-
+curl -X POST 'https://httpbin.org/post' \
+-H 'Content-Type: application/json' \
+-d '{"title":"Testing yapi","description":"This is a test","userId":123,"isPublished":true,"tags":["testing","api","yaml"]}'
 ```
 
-### Zsh Integration (Recommended)
-For enhanced zsh support, add the following to your `~/.zshrc`:
-This enables history appending and an alias for easy access.
-
-```zsh
-YAPI_ZSH="$HOME/.config/yapi/bin/yapi.zsh"
-[ -f "$YAPI_ZSH" ] && source "$YAPI_ZSH"
-alias a="yapi"
-```
-
-## Usage
-
-Create a file like `hello.yapi.yml`:
+You write this in `create-post.yapi.yml`:
 
 ```yaml
 # yaml-language-server: $schema=https://pond.audio/yapi/schema
-
 url: https://httpbin.org
-path: /get
-method: GET
+path: /post
+method: POST
+content_type: application/json
+
+body:
+  title: "Testing yapi"
+  description: "This is a test"
+  userId: 123
+  isPublished: true
+  tags: [testing, api, yaml]
 ```
 
-Run it:
+And just run:
+
+```bash
+yapi -c create-post.yapi.yml
+```
+
+`yapi` builds the `curl` command, runs it, and pretty-prints the JSON response. ✨
+
+-----
+
+## Features (The Good Stuff)
+
+  * **Sane Requests:** Define `url`, `path`, `method`, and `body` in lovely YAML.
+  * **No-Click UI:** An optional `fzf` menu lets you pick a request file.
+  * **YAML \> JSON Magic:** Writes your request `body:` in YAML, it handles the ugly JSON conversion.
+  * **JSON Literal? Fine:** Got raw JSON? Dump it under the `json:` key.
+  * **Schema Support:** Get free autocomplete and validation in your editor with `yapi.schema.json`.
+  * **Fast.** Did we mention it's not a 500MB Electron app?
+
+-----
+
+## What You'll Need
+
+1.  **`curl`**: Obviously.
+2.  **`yq`**: For shredding YAML.
+3.  **`fzf`**: (Optional) For the sweet interactive menu.
+4.  **`zsh`**: It's a Zsh script.
+
+-----
+
+## How to Use It
 
 ```bash
 # Run a specific file
-yapi -c hello.yapi.yml
+./yapi.sh -c examples/create-post.yapi.yml
 
-# Or run with no args to use the fzf fuzzy-finder
-yapi
+# Run against a different server (e.g., staging)
+./yapi.sh -c examples/create-post.yapi.yml -u http://localhost:3000
+
+# Run with no args for the fzf-powered menu
+./yapi.sh
 ```
-
-### POSTing Data
-
-Use `body` for YAML that gets converted to JSON, or `json` to paste a raw JSON literal.
-
-**YAML Body:**
-```yaml
-url: https://httpbin.org/post
-method: POST
-content_type: application/json
-body:
-  title: "My awesome post"
-  tags: [ "testing", "api" ]
-```
-
-**Raw JSON:**
-```yaml
-url: https://httpbin.org/post
-method: POST
-content_type: application/json
-json: |
-  { "id": 123, "status": "active" }
-```
-
-## Key Features
-
--   **Interactive Mode:** Run `yapi` with no flags to use `fzf` to pick a `*.yapi.yml` file from your project.
--   **URL Overrides:** Test against different environments easily.
-    ```bash
-    yapi -c test.yml -u http://localhost:3000
-    ```
--   **Editor Validation:** Add `# yaml-language-server: $schema=https://pond.audio/yapi/schema` to your files for VS Code autocomplete and validation.
-
-## Command Line Options
-
-```
-Usage: yapi [OPTIONS]
-
-Options:
-  -c, --config FILE    Path to YAML config file (or use fzf)
-  -u, --url URL        Override base URL from config
-  -a, --all            Search all *.yml files (not just *.yapi.yml)
-  -h, --help           Display help
-```
-
----
-Made with questionable decisions asnd too much coffee. PRs welcome.
