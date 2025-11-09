@@ -11,7 +11,7 @@ use_all_files=false
 # Display help message
 show_help() {
   cat << EOF
-yapit - YAML API Testing Tool
+yapi - YAML API Testing Tool
 
 Usage: $(basename "$0") [OPTIONS]
 
