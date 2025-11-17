@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://pond.audio/yapi/schema
+
+# gRPC request example using grpcurl
+# This demonstrates a basic gRPC unary call to a Greeter service
+
+# URL with grpc:// scheme for plaintext (insecure) connections
+# Use grpcs:// for TLS-enabled connections
+url: grpc://localhost:50051
+
+# Method must be "grpc" for gRPC requests
+method: grpc
+
+# Proto file name (required for gRPC)
+proto: hello_world.proto
+
+# Directory containing proto files (required for gRPC)
+# Can be relative to config file or absolute path
+proto_path: ../proto
+
+# Full service name from proto file (e.g., package.ServiceName)
+service: helloworld.Greeter
+
+# RPC method name to call
+rpc: SayHello
+
+# Request body - will be converted to JSON and passed to grpcurl
+# Structure must match the proto message definition
+body:
+  name: "World"
+
+# Optional: Force plaintext mode (default: inferred from grpc:// scheme)
+# plaintext: true
+
+# Optional: Skip TLS certificate verification (for grpcs:// only)
+# insecure: false
+
+# Optional: gRPC metadata (headers)
+# metadata:
+#   authorization: "Bearer token123"
+#   request-id: "abc-123"
