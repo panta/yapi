@@ -111,9 +111,22 @@
   "allOf": [
     {
       "if": {
-        "anyOf": [
-          { "required": ["body"] },
-          { "required": ["json"] }
+        "allOf": [
+          {
+            "anyOf": [
+              { "required": ["body"] },
+              { "required": ["json"] }
+            ]
+          },
+          {
+            "not": {
+              "properties": {
+                "url": {
+                  "pattern": "^grpcs?://"
+                }
+              }
+            }
+          }
         ]
       },
       "then": {
