@@ -2,22 +2,24 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://yapit.dev/schema/v1",
   "title": "yapit Configuration",
-  "description": "Schema for yapit YAML API testing configuration files",
+  "description": "Schema for yapit YAML API testing configuration files (HTTP and gRPC)",
   "type": "object",
-  "required": ["url", "method"],
+  "required": ["url"],
   "properties": {
     "url": {
       "type": "string",
-      "description": "Base URL for the API request",
+      "description": "Base URL for the API request. Use http://, https:// for HTTP/REST, grpc://, grpcs:// for gRPC",
       "format": "uri",
       "examples": [
         "http://localhost:3000",
-        "https://api.example.com"
+        "https://api.example.com",
+        "grpc://localhost:50051",
+        "grpcs://api.example.com:443"
       ]
     },
     "path": {
       "type": "string",
-      "description": "Path to append to the base URL",
+      "description": "Path to append to the base URL (HTTP only)",
       "default": "",
       "examples": [
         "/api/users",
@@ -26,13 +28,13 @@
     },
     "method": {
       "type": "string",
-      "description": "HTTP method for the request",
-      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+      "description": "HTTP method for the request (HTTP only)",
+      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "grpc"],
       "default": "GET"
     },
     "content_type": {
       "type": "string",
-      "description": "Content-Type header for the request (required when body or json is present)",
+      "description": "Content-Type header for the request (HTTP only, required when body or json is present)",
       "enum": ["application/json"],
       "examples": ["application/json"]
     },
@@ -43,9 +45,66 @@
     },
     "json": {
       "type": "string",
-      "description": "Raw JSON literal for request body. Mutually exclusive with 'body' field.",
+      "description": "Raw JSON literal for request body (HTTP only). Mutually exclusive with 'body' field.",
       "examples": [
         "{\n  \"id\": 123,\n  \"name\": \"example\"\n}"
+      ]
+    },
+    "proto": {
+      "type": "string",
+      "description": "Proto file name (required for gRPC)",
+      "examples": [
+        "hello_world.proto",
+        "api.proto"
+      ]
+    },
+    "proto_path": {
+      "type": "string",
+      "description": "Directory containing proto files (required for gRPC). Can be relative or absolute path.",
+      "examples": [
+        "./proto",
+        "../protos",
+        "/path/to/protos"
+      ]
+    },
+    "service": {
+      "type": "string",
+      "description": "Full gRPC service name (required for gRPC, format: package.ServiceName)",
+      "examples": [
+        "helloworld.Greeter",
+        "api.v1.UserService"
+      ]
+    },
+    "rpc": {
+      "type": "string",
+      "description": "RPC method name to call (required for gRPC)",
+      "examples": [
+        "SayHello",
+        "GetUser",
+        "CreatePost"
+      ]
+    },
+    "plaintext": {
+      "type": "boolean",
+      "description": "Force plaintext/insecure mode for gRPC (optional, auto-detected from grpc:// scheme)",
+      "default": false
+    },
+    "insecure": {
+      "type": "boolean",
+      "description": "Skip TLS certificate verification for gRPC (optional, for grpcs:// only)",
+      "default": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "gRPC metadata (headers) as key-value pairs",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "examples": [
+        {
+          "authorization": "Bearer token123",
+          "request-id": "abc-123"
+        }
       ]
     }
   },
