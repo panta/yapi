@@ -8,3 +8,4 @@ yq
 git
 fzf
 jq
+grpcurl

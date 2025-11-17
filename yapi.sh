@@ -1,6 +1,6 @@
 #!/bin/bash
 # yapit Yaml API Testing
-# requires: bash, curl, yq, fzf (optional, for interactive file selection)
+# requires: bash, curl, yq, jq, fzf (optional, for interactive file selection), grpcurl (for gRPC requests)
 set -e
 
 # Default values
@@ -11,7 +11,7 @@ use_all_files=false
 # Display help message
 show_help() {
   cat << EOF
-yapi - YAML API Testing Tool
+yapi - YAML API Testing Tool (HTTP/REST and gRPC)
 
 Usage: $(basename "$0") [OPTIONS]
 
@@ -21,9 +21,14 @@ Options:
   -a, --all            Search all YAML files (default: git-tracked only)
   -h, --help           Display this help message
 
+Supported Protocols:
+  HTTP/REST:  http://, https://
+  gRPC:       grpc:// (plaintext), grpcs:// (TLS)
+
 Examples:
   $(basename "$0") -c test.yaml
   $(basename "$0") --config test.yaml --url http://localhost:8080
+  $(basename "$0") -c grpc-service.yaml
   $(basename "$0") --all
 
 EOF
@@ -122,6 +127,20 @@ body_exists=$(yq e 'has("body")' "$config")
 json_exists=$(yq e 'has("json")' "$config")
 query_exists=$(yq e 'has("query")' "$config")
 
+# Detect protocol (HTTP vs gRPC)
+protocol="http"
+if [[ "$config_url" =~ ^grpcs?:// ]] || [[ "$method" == "grpc" ]]; then
+  protocol="grpc"
+  # Extract gRPC-specific config
+  proto=$(yq e '.proto // ""' "$config")
+  proto_path=$(yq e '.proto_path // ""' "$config")
+  service=$(yq e '.service // ""' "$config")
+  rpc=$(yq e '.rpc // ""' "$config")
+  plaintext=$(yq e '.plaintext // ""' "$config")
+  insecure=$(yq e '.insecure // ""' "$config")
+  metadata_exists=$(yq e 'has("metadata")' "$config")
+fi
+
 # URL priority: CLI flag > YAML url (required if no CLI flag)
 if [[ -n "$cli_url" ]]; then
   url="$cli_url"
@@ -131,8 +150,10 @@ else
   error_exit "URL is required: either provide 'url' in config file or use -u flag"
 fi
 
-# Build full URL with encoded path
-if [[ -n "$path" ]]; then
+# HTTP-specific URL and request building
+if [[ "$protocol" == "http" ]]; then
+  # Build full URL with encoded path
+  if [[ -n "$path" ]]; then
   # Encode path segments but preserve slashes
   protected=$(echo "$path" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/___PERCENT___\1/g')
   protected=$(echo "$protected" | sed 's/\//___SLASH___/g')
@@ -219,7 +240,7 @@ if [[ "$body_exists" == "true" ]] || [[ "$json_exists" == "true" ]]; then
     -d "$request_json"
   )
 fi
-
+fi  # End of HTTP-specific processing
 
 # now -- write to our history file
 HISTORY_FILE="${HOME}/.yapi_history"
@@ -240,13 +261,113 @@ fi
 
 echo "$(date +%s) | $command" >> "$HISTORY_FILE"
 
-# Execute request and capture output
-#echo "Executing $method request to $full_url"
-#echo "Curl command: curl ${curl_args[*]}"
-echo "Executing $method request to $full_url" >&2
-response=$(curl -L "${curl_args[@]}")
+# Execute request based on protocol
+if [[ "$protocol" == "grpc" ]]; then
+  # gRPC request using grpcurl
+  # Check if grpcurl is installed
+  if ! command -v grpcurl &>/dev/null; then
+    error_exit "grpcurl is required for gRPC requests but not found. Install it: brew install grpcurl (macOS) or go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"
+  fi
 
+  # Validate required gRPC fields
+  if [[ -z "$service" ]]; then
+    error_exit "service field is required for gRPC requests"
+  fi
+  if [[ -z "$rpc" ]]; then
+    error_exit "rpc field is required for gRPC requests"
+  fi
 
+  # Proto files are optional (uses server reflection if not provided)
+  use_proto_files=false
+  if [[ -n "$proto" ]]; then
+    use_proto_files=true
+    # If proto is specified, proto_path is required
+    if [[ -z "$proto_path" ]]; then
+      error_exit "proto_path is required when proto is specified"
+    fi
+
+    # Resolve proto_path relative to config file directory
+    config_dir=$(dirname "$config")
+    if [[ "$proto_path" != /* ]]; then
+      # Relative path - resolve relative to config file
+      resolved_proto_path=$(cd "$config_dir" && cd "$proto_path" && pwd)
+    else
+      # Absolute path
+      resolved_proto_path="$proto_path"
+    fi
+
+    # Validate proto_path exists
+    if [[ ! -d "$resolved_proto_path" ]]; then
+      error_exit "proto_path directory does not exist: $resolved_proto_path"
+    fi
+  fi
+
+  # Extract server address from URL (remove grpc:// or grpcs:// scheme)
+  server_addr="${url#grpc://}"
+  server_addr="${server_addr#grpcs://}"
+
+  # Build grpcurl command
+  grpcurl_args=()
+
+  # Add proto file arguments if provided (otherwise uses server reflection)
+  if [[ "$use_proto_files" == "true" ]]; then
+    grpcurl_args+=(
+      -import-path "$resolved_proto_path"
+      -proto "$proto"
+    )
+  fi
+
+  # Determine if plaintext should be used
+  use_plaintext=false
+  if [[ "$url" =~ ^grpc:// ]]; then
+    # grpc:// scheme implies plaintext
+    use_plaintext=true
+  fi
+  if [[ "$plaintext" == "true" ]]; then
+    use_plaintext=true
+  fi
+
+  if [[ "$use_plaintext" == "true" ]]; then
+    grpcurl_args+=(-plaintext)
+  fi
+
+  # Add insecure flag if specified (for TLS without verification)
+  if [[ "$insecure" == "true" ]]; then
+    grpcurl_args+=(-insecure)
+  fi
+
+  # Add metadata (gRPC headers) if present
+  if [[ "$metadata_exists" == "true" ]]; then
+    # Get all metadata keys
+    metadata_keys=$(yq e '.metadata | keys | .[]' "$config")
+    while IFS= read -r key; do
+      if [[ -n "$key" ]]; then
+        value=$(yq e ".metadata[\"$key\"]" "$config")
+        grpcurl_args+=(-H "$key: $value")
+      fi
+    done <<< "$metadata_keys"
+  fi
+
+  # Add request body data if present
+  if [[ "$body_exists" == "true" ]]; then
+    # Convert YAML body to JSON
+    request_json=$(yq e '.body' -o=json "$config")
+    grpcurl_args+=(-d "$request_json")
+  fi
+
+  # Add server address and service/method
+  grpcurl_args+=("$server_addr")
+  grpcurl_args+=("$service/$rpc")
+
+  echo "Executing gRPC request to $server_addr ($service/$rpc)" >&2
+  response=$(grpcurl "${grpcurl_args[@]}")
+else
+  # HTTP request using curl
+  #echo "Executing $method request to $full_url"
+  #echo "Curl command: curl ${curl_args[*]}"
+  echo "Executing $method request to $full_url" >&2
+  response=$(curl -L "${curl_args[@]}")
+fi
 
 # Try to format as JSON if possible, otherwise print as-is
 if echo "$response" | jq . &>/dev/null; then

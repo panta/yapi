@@ -52,7 +52,7 @@
     },
     "proto": {
       "type": "string",
-      "description": "Proto file name (required for gRPC)",
+      "description": "Proto file name (optional for gRPC, uses server reflection if omitted)",
       "examples": [
         "hello_world.proto",
         "api.proto"
@@ -60,7 +60,7 @@
     },
     "proto_path": {
       "type": "string",
-      "description": "Directory containing proto files (required for gRPC). Can be relative or absolute path.",
+      "description": "Directory containing proto files (optional for gRPC). Can be relative or absolute path. Required if proto is specified.",
       "examples": [
         "./proto",
         "../protos",
@@ -142,7 +142,7 @@
         }
       },
       "then": {
-        "required": ["proto", "proto_path", "service", "rpc"],
+        "required": ["service", "rpc"],
         "properties": {
           "method": {
             "const": "grpc"
