@@ -119,6 +119,31 @@
       "then": {
         "required": ["content_type"]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "url": {
+            "pattern": "^grpcs?://"
+          }
+        }
+      },
+      "then": {
+        "required": ["proto", "proto_path", "service", "rpc"],
+        "properties": {
+          "method": {
+            "const": "grpc"
+          }
+        }
+      },
+      "else": {
+        "required": ["method"],
+        "properties": {
+          "method": {
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+          }
+        }
+      }
     }
   ],
   "oneOf": [
@@ -161,6 +186,17 @@
       "method": "POST",
       "content_type": "application/json",
       "json": "{\n  \"id\": 123,\n  \"status\": \"active\"\n}"
+    },
+    {
+      "url": "grpc://localhost:50051",
+      "method": "grpc",
+      "proto": "hello_world.proto",
+      "proto_path": "./proto",
+      "service": "helloworld.Greeter",
+      "rpc": "SayHello",
+      "body": {
+        "name": "World"
+      }
     }
   ]
 }
