@@ -360,13 +360,19 @@ if [[ "$protocol" == "grpc" ]]; then
   grpcurl_args+=("$service/$rpc")
 
   echo "Executing gRPC request to $server_addr ($service/$rpc)" >&2
+  start_time=$(date +%s%N)
   response=$(grpcurl "${grpcurl_args[@]}")
+  end_time=$(date +%s%N)
+  elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 else
   # HTTP request using curl
   #echo "Executing $method request to $full_url"
   #echo "Curl command: curl ${curl_args[*]}"
   echo "Executing $method request to $full_url" >&2
+  start_time=$(date +%s%N)
   response=$(curl -L "${curl_args[@]}")
+  end_time=$(date +%s%N)
+  elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 fi
 
 # Try to format as JSON if possible, otherwise print as-is
@@ -375,6 +381,9 @@ if echo "$response" | jq . &>/dev/null; then
 else
   echo "$response"
 fi
+
+# Print timing after the response
+echo "Request completed in ${elapsed_ms}ms" >&2
 
 
 
