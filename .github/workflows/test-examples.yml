@@ -1,4 +1,4 @@
-name: Test Examples
+name: Tests
 
 on:
   push:
@@ -8,9 +8,30 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-examples:
+  unit-tests:
     runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
+    - name: Install dependencies
+      run: |
+        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        sudo chmod +x /usr/local/bin/yq
+
+    - name: Install bats
+      run: |
+        git clone https://github.com/bats-core/bats-core.git
+        cd bats-core && sudo ./install.sh /usr/local
+
+    - name: Make scripts executable
+      run: chmod +x yapi lib/*.sh
+
+    - name: Run unit tests
+      run: bats test/yapi_utils.bats test/yapi_config.bats test/yapi_http.bats
+
+  integration-tests:
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -23,8 +44,16 @@ jobs:
     - name: Install grpcurl
       run: sudo snap install --edge grpcurl
 
-    - name: Make yapi executable
+    - name: Install bats
+      run: |
+        git clone https://github.com/bats-core/bats-core.git
+        cd bats-core && sudo ./install.sh /usr/local
+
+    - name: Make scripts executable
       run: chmod +x yapi lib/*.sh
+
+    - name: Run integration tests
+      run: bats test/integration.bats
 
     - name: Test all examples
       run: |
@@ -34,7 +63,6 @@ jobs:
           if [ -f "$example" ]; then
             echo "Testing: $example"
             ./yapi -c "$example" || exit 1
-            echo "✓ $example passed"
           fi
         done
         echo "All examples tested successfully"
