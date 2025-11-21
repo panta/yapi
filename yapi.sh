@@ -24,6 +24,7 @@ Options:
 Supported Protocols:
   HTTP/REST:  http://, https://
   gRPC:       grpc:// (plaintext), grpcs:// (TLS)
+  TCP:        tcp://host:port
 
 Examples:
   $(basename "$0") -c test.yaml
@@ -127,7 +128,7 @@ body_exists=$(yq e 'has("body")' "$config")
 json_exists=$(yq e 'has("json")' "$config")
 query_exists=$(yq e 'has("query")' "$config")
 
-# Detect protocol (HTTP vs gRPC)
+# Detect protocol (HTTP vs gRPC vs TCP)
 protocol="http"
 if [[ "$config_url" =~ ^grpcs?:// ]] || [[ "$method" == "grpc" ]]; then
   protocol="grpc"
@@ -139,6 +140,13 @@ if [[ "$config_url" =~ ^grpcs?:// ]] || [[ "$method" == "grpc" ]]; then
   plaintext=$(yq e '.plaintext // ""' "$config")
   insecure=$(yq e '.insecure // ""' "$config")
   metadata_exists=$(yq e 'has("metadata")' "$config")
+elif [[ "$config_url" =~ ^tcp:// ]] || [[ "$method" == "tcp" ]]; then
+  protocol="tcp"
+  # Extract TCP-specific config
+  data=$(yq e '.data // ""' "$config")
+  encoding=$(yq e '.encoding // "text"' "$config")
+  read_timeout=$(yq e '.read_timeout // 5' "$config")
+  close_after_send=$(yq e '.close_after_send // "true"' "$config")
 fi
 
 # URL priority: CLI flag > YAML url (required if no CLI flag)
@@ -362,6 +370,61 @@ if [[ "$protocol" == "grpc" ]]; then
   echo "Executing gRPC request to $server_addr ($service/$rpc)" >&2
   start_time=$(date +%s%N)
   response=$(grpcurl "${grpcurl_args[@]}")
+  end_time=$(date +%s%N)
+  elapsed_ms=$(( (end_time - start_time) / 1000000 ))
+elif [[ "$protocol" == "tcp" ]]; then
+  # TCP request using netcat
+  if ! command -v nc &>/dev/null; then
+    error_exit "netcat (nc) is required for TCP requests but not found. Install it: brew install netcat (macOS)"
+  fi
+
+  # Extract host and port from URL (remove tcp:// scheme)
+  server_addr="${url#tcp://}"
+  tcp_host="${server_addr%:*}"
+  tcp_port="${server_addr##*:}"
+
+  # Validate host and port
+  if [[ -z "$tcp_host" ]]; then
+    error_exit "TCP host is required in URL (tcp://host:port)"
+  fi
+  if [[ -z "$tcp_port" ]]; then
+    error_exit "TCP port is required in URL (tcp://host:port)"
+  fi
+
+  # Prepare data to send
+  send_data=""
+  if [[ -n "$data" ]]; then
+    send_data="$data"
+  elif [[ "$body_exists" == "true" ]]; then
+    # Convert YAML body to JSON for TCP
+    send_data=$(yq e '.body' -o=json "$config")
+  fi
+
+  # Handle encoding
+  if [[ "$encoding" == "hex" ]]; then
+    # Convert hex string to binary
+    send_data=$(echo -n "$send_data" | xxd -r -p)
+  elif [[ "$encoding" == "base64" ]]; then
+    # Decode base64
+    send_data=$(echo -n "$send_data" | base64 -d)
+  fi
+
+  echo "Executing TCP request to $tcp_host:$tcp_port" >&2
+  if [[ -n "$send_data" ]]; then
+    echo "Sending data: $send_data" >&2
+  fi
+
+  start_time=$(date +%s%N)
+
+  # Use netcat with timeout
+  nc_args=(-w "$read_timeout")
+
+  if [[ -n "$send_data" ]]; then
+    response=$(echo -n "$send_data" | nc "${nc_args[@]}" "$tcp_host" "$tcp_port" 2>&1)
+  else
+    response=$(nc "${nc_args[@]}" "$tcp_host" "$tcp_port" 2>&1 </dev/null)
+  fi
+
   end_time=$(date +%s%N)
   elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 else
