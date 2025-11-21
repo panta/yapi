@@ -23,8 +23,8 @@ jobs:
     - name: Install grpcurl
       run: sudo snap install --edge grpcurl
 
-    - name: Make yapi.sh executable
-      run: chmod +x yapi.sh
+    - name: Make yapi executable
+      run: chmod +x yapi lib/*.sh
 
     - name: Test all examples
       run: |
@@ -33,7 +33,7 @@ jobs:
         for example in examples/*.yml examples/*.yaml; do
           if [ -f "$example" ]; then
             echo "Testing: $example"
-            ./yapi.sh -c "$example" || exit 1
+            ./yapi -c "$example" || exit 1
             echo "✓ $example passed"
           fi
         done

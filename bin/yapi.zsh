@@ -6,9 +6,9 @@ YAPI_HOME="${YAPI_HOME:-$HOME/.config/yapi}"
 alias yapi='yapi_zsh'
 
 function yapi_zsh() {
-  [ -f "$YAPI_HOME/yapi.sh" ] || return 1
+  [ -f "$YAPI_HOME/yapi" ] || return 1
 
-  bash "$YAPI_HOME/yapi.sh" "$@"
+  "$YAPI_HOME/yapi" "$@"
   success=$?
   [ $success -ne 0 ] && return $success
 
