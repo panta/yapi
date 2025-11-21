@@ -8,13 +8,14 @@
   "properties": {
     "url": {
       "type": "string",
-      "description": "Base URL for the API request. Use http://, https:// for HTTP/REST, grpc://, grpcs:// for gRPC",
+      "description": "Base URL for the API request. Use http://, https:// for HTTP/REST, grpc://, grpcs:// for gRPC, tcp:// for TCP",
       "format": "uri",
       "examples": [
         "http://localhost:3000",
         "https://api.example.com",
         "grpc://localhost:50051",
-        "grpcs://api.example.com:443"
+        "grpcs://api.example.com:443",
+        "tcp://localhost:9877"
       ]
     },
     "path": {
@@ -28,8 +29,8 @@
     },
     "method": {
       "type": "string",
-      "description": "HTTP method for the request (HTTP only)",
-      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "grpc"],
+      "description": "Protocol method for the request",
+      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "grpc", "tcp"],
       "default": "GET"
     },
     "content_type": {
@@ -106,6 +107,31 @@
           "request-id": "abc-123"
         }
       ]
+    },
+    "data": {
+      "type": "string",
+      "description": "Raw data to send over TCP connection (alternative to body for TCP)",
+      "examples": [
+        "Hello, server!\n",
+        "GET / HTTP/1.1\r\n\r\n"
+      ]
+    },
+    "encoding": {
+      "type": "string",
+      "description": "Encoding format for TCP data",
+      "enum": ["text", "hex", "base64"],
+      "default": "text"
+    },
+    "read_timeout": {
+      "type": "number",
+      "description": "Timeout in seconds for reading TCP response",
+      "default": 5,
+      "minimum": 1
+    },
+    "close_after_send": {
+      "type": "boolean",
+      "description": "Close TCP connection after sending data",
+      "default": true
     }
   },
   "allOf": [
@@ -122,7 +148,7 @@
             "not": {
               "properties": {
                 "url": {
-                  "pattern": "^grpcs?://"
+                  "pattern": "^(grpcs?|tcp)://"
                 }
               }
             }
@@ -150,10 +176,26 @@
         }
       },
       "else": {
-        "required": ["method"],
-        "properties": {
-          "method": {
-            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+        "if": {
+          "properties": {
+            "url": {
+              "pattern": "^tcp://"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "method": {
+              "const": "tcp"
+            }
+          }
+        },
+        "else": {
+          "required": ["method"],
+          "properties": {
+            "method": {
+              "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+            }
           }
         }
       }
@@ -210,6 +252,16 @@
       "body": {
         "name": "World"
       }
+    },
+    {
+      "url": "tcp://localhost:9877",
+      "method": "tcp",
+      "body": {
+        "type": "get_session_info",
+        "params": {}
+      },
+      "read_timeout": 5,
+      "close_after_send": true
     }
   ]
 }
