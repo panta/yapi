@@ -3,6 +3,7 @@
 # We can also generate the alias here.
 
 YAPI_HOME="${YAPI_HOME:-$HOME/.config/yapi}"
+export PATH="$YAPI_HOME:$PATH"
 alias yapi='yapi_zsh'
 
 function yapi_zsh() {
