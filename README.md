@@ -1,79 +1,158 @@
 # yapi 🐏
 
-Tired of `curl` commands long enough to be a novel? Sick of waiting for Postman to load just to send one. simple. request?
+Tired of `curl` novels and heavyweight API tools for one tiny request? **yapi** is a small, Bash-powered YAML API client that speaks HTTP, gRPC, and raw TCP.
 
-**Stop the madness.**
+You write clean YAML, yapi does the ugly shell work.
 
-**yapi** is a tiny script that runs API requests from clean, simple YAML files. It's the fast, no-bloat, terminal-native alternative you've been dreaming of.
+---
 
------
+## Quick Taste
 
-## What's the Big Idea?
-
-Instead of this mess:
+Instead of this `curl` command:
 
 ```bash
 curl -X POST 'https://httpbin.org/post' \
--H 'Content-Type: application/json' \
--d '{"title":"Testing yapi","description":"This is a test","userId":123,"isPublished":true,"tags":["testing","api","yaml"]}'
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Testing yapi","description":"...","userId":123,"isPublished":true,"tags":["testing","api","yaml"]}'
 ```
 
-You write this in `create-post.yapi.yml`:
+You write this `yapi` config:
 
 ```yaml
-# yaml-language-server: $schema=https://pond.audio/yapi/schema
+# examples/create-post.yapi.yml
+# yaml-language-server: $schema=https://yapit.dev/schema/v1
+
 url: https://httpbin.org
 path: /post
 method: POST
 content_type: application/json
 
 body:
-  title: "Testing yapi"
-  description: "This is a test"
+  title: "Testing yapi - YAML API Testing Tool"
+  description: "This demo shows nested objects, arrays, and various data types"
   userId: 123
   isPublished: true
-  tags: [testing, api, yaml]
+  tags:
+    - testing
+    - api
+    - yaml
 ```
 
-And just run:
+Then just run `yapi`:
 
 ```bash
-yapi -c create-post.yapi.yml
+yapi -c examples/create-post.yapi.yml
 ```
 
-`yapi` builds the `curl` command, runs it, and pretty-prints the JSON response. ✨
+---
 
------
+## Installation
 
-## Features (The Good Stuff)
+1.  **Clone the repo** somewhere permanent, like `~/.config/yapi`.
+    ```bash
+    git clone https://github.com/jpond/yapi.git ~/.config/yapi
+    ```
 
-  * **Sane Requests:** Define `url`, `path`, `method`, and `body` in lovely YAML.
-  * **No-Click UI:** An optional `fzf` menu lets you pick a request file.
-  * **YAML \> JSON Magic:** Writes your request `body:` in YAML, it handles the ugly JSON conversion.
-  * **JSON Literal? Fine:** Got raw JSON? Dump it under the `json:` key.
-  * **Schema Support:** Get free autocomplete and validation in your editor with `yapi.schema.json`.
-  * **Fast.** Did we mention it's not a 500MB Electron app?
+2.  **Make scripts executable**.
+    ```bash
+    chmod +x ~/.config/yapi/yapi ~/.config/yapi/lib/*.sh
+    ```
 
------
+3.  **Add to your `$PATH`** in `~/.zshrc` or `~/.bashrc`.
+    ```sh
+    export PATH="$HOME/.config/yapi:$PATH"
+    ```
 
-## What You'll Need
+4.  **Reload your shell** and you're good to go.
+    ```bash
+    source ~/.zshrc
+    yapi -h
+    ```
 
-1.  **`curl`**: Obviously.
-2.  **`yq`**: For shredding YAML.
-3.  **`fzf`**: (Optional) For the sweet interactive menu.
-4.  **`zsh`**: It's a Zsh script.
+---
 
------
+## Features
 
-## How to Use It
+*   **Declarative YAML** configs for clean, version-controllable API requests.
+*   **Multi-Protocol**: Support for HTTP/REST, gRPC, and raw TCP.
+*   **`fzf` Integration**: Interactive file picker for `*.yapi.yml` files.
+*   **History**: All runs are logged to `~/.yapi_history` for easy re-use.
+*   **Editor Support**: JSON Schema for autocomplete and validation in your editor.
+*   **Lightweight**: Just a few shell scripts and common command-line tools.
+
+---
+
+## Usage
 
 ```bash
-# Run with no args for the fzf-powered menu
+# Interactive selection (fzf over git tracked *.yapi.yml)
 yapi
 
-# Run a specific file
-yapi -c examples/create-post.yapi.yml
+# Explicit config file
+yapi -c examples/google.yapi.yml
 
-# Run against a different server (e.g., staging)
-yapi -c examples/create-post.yapi.yml -u http://localhost:3000
+# Override base URL at runtime
+yapi -c examples/google.yapi.yml -u "https://httpbin.org/get"
+
+# Search all YAML files, not just git tracked
+yapi --all
 ```
+
+---
+
+## Supported Protocols
+
+### HTTP / REST
+
+Supports standard verbs, query params, and JSON bodies.
+
+```yaml
+url: https://httpbin.org
+path: /post
+method: POST
+query: { search: "yapi" }
+body:
+  name: "yapi demo"
+  isPublished: true
+```
+
+### gRPC (via `grpcurl`)
+
+Uses server reflection by default. Can also use local `.proto` files.
+
+```yaml
+url: grpc://grpcb.in:9000
+method: grpc
+service: hello.HelloService
+rpc: SayHello
+body:
+  greeting: "yapi"
+```
+
+### TCP (via `nc`)
+
+Sends raw data over TCP. Supports text, hex, and base64 encoding.
+
+```yaml
+url: tcp://tcpbin.com:4242
+method: tcp
+data: "Hello from yapi!\n"
+encoding: text
+```
+
+---
+
+## Dependencies
+
+-   **Core**: `bash`, `curl`, `jq`, `yq` (mikefarah), `git`
+-   **Optional**: `fzf` (for picker), `grpcurl` (for gRPC), `nc` (for TCP)
+
+---
+
+## Development
+
+-   **Tests**: Written in `bats`. Run with `bats test/*.bats`.
+-   **Schema**: If you change `yapi` behavior, keep `yapi.schema.json` in sync.
+-   **Dependencies**: If you add a new dependency, add it to the `.depends` file.
+
+Contributions are welcome!
