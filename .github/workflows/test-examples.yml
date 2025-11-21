@@ -56,13 +56,4 @@ jobs:
       run: bats test/integration.bats
 
     - name: Test all examples
-      run: |
-        set -e
-        echo "Testing all example files..."
-        for example in examples/*.yml examples/*.yaml; do
-          if [ -f "$example" ]; then
-            echo "Testing: $example"
-            ./yapi -c "$example" || exit 1
-          fi
-        done
-        echo "All examples tested successfully"
+      run: ./scripts/run-all-examples.sh
