@@ -35,7 +35,7 @@ local function open_result_window()
     end
   end
 
-  vim.cmd("vsplit")
+  vim.cmd("rightbelow vsplit")
   local win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(win, buf)
   vim.api.nvim_win_set_option(win, "wrap", false)
