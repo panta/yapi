@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # yapi_select.sh - FZF-based config file selection
 
 # Select config file using fzf

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # yapi_config.sh - Config file handling and validation
 
 YAPI_EXTENSION="yapi"
