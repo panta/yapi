@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # yapi - YAML API Testing Tool
 # Main entry point
 set -e

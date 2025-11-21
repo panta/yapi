@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # yapi_http.sh - HTTP request handling
 
 # Build URL with encoded path and query string

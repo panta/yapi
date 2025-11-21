@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # yapi_tcp.sh - TCP request handling
 
 # Execute TCP request

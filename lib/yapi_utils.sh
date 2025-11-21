@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # yapi_utils.sh - General utilities for yapi
 
 # Display help message

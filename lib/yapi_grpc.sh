@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # yapi_grpc.sh - gRPC request handling
 
 # Execute gRPC request
