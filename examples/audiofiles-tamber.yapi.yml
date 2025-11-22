@@ -8,3 +8,4 @@ query:
   limit: 1
   depth: 2
   select[createdAt]: true
+  select[semanticEmbedding]: true
