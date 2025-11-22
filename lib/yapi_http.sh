@@ -34,15 +34,8 @@ http_build_url() {
       if [[ -n "$key" ]]; then
         local value
         value=$(yq e ".query[\"$key\"]" "$config")
-
-        # Encode key and value, but preserve brackets in keys for array notation
         local encoded_key
-        # First encode everything
         encoded_key=$(printf "%s" "$key" | jq -Rr @uri)
-        # Then decode brackets to support select[field] notation
-        encoded_key="${encoded_key//%5B/[}"
-        encoded_key="${encoded_key//%5D/]}"
-
         local encoded_value
         encoded_value=$(printf "%s" "$value" | jq -Rr @uri)
 
