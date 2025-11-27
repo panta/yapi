@@ -124,6 +124,10 @@ execute_http_request() {
   end_time=$(date +%s%N)
   elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 
+  if [[ -n "$CONFIG_JQ_FILTER" ]]; then
+    response=$(echo "$response" | jq "$CONFIG_JQ_FILTER")
+  fi
+
   print_response "$response"
   print_timing "$elapsed_ms"
 }

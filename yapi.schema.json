@@ -132,6 +132,10 @@
       "type": "boolean",
       "description": "Close TCP connection after sending data",
       "default": true
+    },
+    "jq_filter": {
+      "type": "string",
+      "description": "jq filter to apply to the response body"
     }
   },
   "allOf": [

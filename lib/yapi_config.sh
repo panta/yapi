@@ -61,6 +61,7 @@ parse_common_config() {
   CONFIG_BODY_EXISTS=$(config_has_key "$config" "body")
   CONFIG_JSON_EXISTS=$(config_has_key "$config" "json")
   CONFIG_QUERY_EXISTS=$(config_has_key "$config" "query")
+  CONFIG_JQ_FILTER=$(get_config_value "$config" ".jq_filter")
 }
 
 # Parse gRPC-specific config

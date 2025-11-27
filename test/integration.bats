@@ -47,3 +47,10 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"httpbin.org"* ]]
 }
+
+@test "yapi executes jq post-processing" {
+  run "$YAPI" -c "$SCRIPT_DIR/test/jq_filter.yapi.yml"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"samples"* ]]
+}
+
