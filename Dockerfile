@@ -67,7 +67,7 @@ ENV NODE_ENV=production \
 
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+    adduser --system --uid 1001 --home /home/nextjs --shell /bin/bash --ingroup nodejs nextjs
 
 # --- Yapi CLI Integration ---
 # Copy the yapi CLI and its dependencies from the builder stage
