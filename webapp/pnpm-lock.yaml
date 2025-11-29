@@ -38,9 +38,6 @@ importers:
       vscode-jsonrpc:
         specifier: ^8.2.1
         version: 8.2.1
-      vscode-languageclient:
-        specifier: ^9.0.1
-        version: 9.0.1
       vscode-ws-jsonrpc:
         specifier: ^3.5.0
         version: 3.5.0
