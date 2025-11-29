@@ -9,7 +9,8 @@
 FROM alpine:latest AS yapi_builder
 
 # Install yapi's core dependencies
-RUN apk add --no-cache bash curl jq yq git fzf grpcurl netcat-openbsd
+RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing grpcurl \
+    && apk add --no-cache bash curl jq yq git fzf netcat-openbsd
 
 # Set up a clean directory for yapi artifacts
 WORKDIR /yapi_dist
