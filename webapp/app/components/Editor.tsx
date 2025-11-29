@@ -1,7 +1,7 @@
 "use client";
 
 import MonacoEditor, { Monaco, BeforeMount, loader } from "@monaco-editor/react";
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import type { editor } from "monaco-editor";
 
 interface EditorProps {
@@ -13,6 +13,12 @@ interface EditorProps {
 export default function Editor({ value, onChange, onRun }: EditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const onRunRef = useRef(onRun);
+
+  // Keep the ref updated with the latest onRun callback
+  useEffect(() => {
+    onRunRef.current = onRun;
+  }, [onRun]);
 
   const handleEditorWillMount: BeforeMount = async (monaco) => {
     // Import and configure monaco-yaml
@@ -41,11 +47,12 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     monacoRef.current = monaco;
 
     // Add keyboard shortcut: Cmd+Enter or Ctrl+Enter to run
+    // Use ref to always call the latest onRun callback
     editor.addCommand(
       // eslint-disable-next-line no-bitwise
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
       () => {
-        onRun();
+        onRunRef.current();
       }
     );
   }
