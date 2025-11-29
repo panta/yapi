@@ -62,8 +62,6 @@ log_history() {
     command+=" -u \"$cli_url\""
   fi
 
-  # Ensure history directory exists
-  mkdir -p "$(dirname "$history_file")"
   echo "$(date +%s) | $command" >> "$history_file"
 }
 
