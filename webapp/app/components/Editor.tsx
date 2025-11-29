@@ -5,35 +5,47 @@
 import MonacoEditor, { Monaco, BeforeMount } from "@monaco-editor/react";
 import { useRef, useEffect, useState } from "react";
 import type { editor } from "monaco-editor";
-
-// import your JSON schema as an object
-// (tsconfig has "resolveJsonModule": true, so this is allowed)
+import {
+  CloseAction,
+  ErrorAction,
+  MonacoLanguageClient,
+} from "monaco-languageclient";
+import {
+  MessageReader,
+  MessageWriter,
+} from "vscode-ws-jsonrpc";
+import { toSocket, WebSocketMessageReader, WebSocketMessageWriter } from 'vscode-ws-jsonrpc';
 import yapiSchema from "../../yapi.schema.json";
 
-// Tell Monaco how to spawn workers, including monaco-yaml's worker.
-// This must run on the client.
-if (typeof window !== "undefined") {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).MonacoEnvironment = {
-    getWorker(_: string, label: string) {
-      switch (label) {
-        case "yaml":
-          // monaco-yaml LSP worker (does validation, completion, formatting)
-          // Using a local wrapper to work around Turbopack bundling issues
-          return new Worker(
-            new URL("../yaml.worker.ts", import.meta.url),
-          );
-        default:
-          // normal Monaco editor worker
-          return new Worker(
-            new URL(
-              "monaco-editor/esm/vs/editor/editor.worker.js",
-              import.meta.url,
-            ),
-          );
-      }
+function createLanguageClient(
+  transports: any,
+): MonacoLanguageClient {
+  return new MonacoLanguageClient({
+    name: "YAML Language Client",
+    clientOptions: {
+      documentSelector: ["yaml"],
+      errorHandler: {
+        error: () => ({ action: ErrorAction.Continue }),
+        closed: () => ({ action: CloseAction.DoNotRestart }),
+      },
+      // "workaround" for missing schemas property
+      // https://github.com/microsoft/vscode-languageserver-node/issues/1314#issuecomment-1847683435
+      initializationOptions: {
+        schemas: [
+          {
+            uri: "https://pond.audio/yapi/schema",
+            fileMatch: ["yapi.yaml", "**/yapi.yaml"],
+            schema: yapiSchema,
+          },
+        ],
+      },
     },
-  };
+    connectionProvider: {
+      get: () => {
+        return Promise.resolve(transports);
+      },
+    },
+  });
 }
 
 interface EditorProps {
@@ -92,7 +104,6 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   }, [vimEnabled, editorInstance, monacoInstance]);
 
   const handleEditorWillMount: BeforeMount = async (monaco) => {
-    // your theme as before
     monaco.editor.defineTheme("yapi-light", {
       base: "vs",
       inherit: true,
@@ -105,26 +116,24 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
       },
     });
 
-    const { configureMonacoYaml } = await import("monaco-yaml");
-
-    // ONLY your custom schema, no generic YAML / schema-store fetches
-    configureMonacoYaml(monaco, {
-      completion: true,
-      hover: true,
-      validate: true,
-      format: true,          // enable Prettier-based formatting
-      enableSchemaRequest: false, // do not fetch anything from remote
-      schemas: [
-        {
-          // pseudo URI for the schema
-          uri: "https://pond.audio/yapi/schema",
-          // which models this schema applies to
-          fileMatch: ["**/yapi.yaml", "*"],
-          // inline schema object from yapi.schema.json
-          schema: yapiSchema as any,
-        },
-      ],
+    monaco.languages.register({
+      id: "yaml",
+      extensions: [".yaml", ".yml"],
+      aliases: ["YAML", "yaml"],
+      mimetypes: ["application/x-yaml"],
     });
+
+    const yamlWorker = new Worker(
+      new URL("monaco-yaml/yaml.worker", import.meta.url),
+      { type: "module" },
+    );
+
+    const reader = new MessageReader(yamlWorker);
+    const writer = new MessageWriter(yamlWorker);
+    const languageClient = createLanguageClient({ reader, writer });
+    languageClient.start();
+
+    reader.onClose(() => languageClient.stop());
   };
 
   async function handleEditorDidMount(
@@ -168,7 +177,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
         </div>
         <button
           onClick={onRun}
-          className="px-3 py-1 text-sm font-medium text-white bg-yapi-accent hover:bg-yapi-accent-hover rounded-md transition-colors"
+          className="px-3 py-1 text-sm font-medium text-white bg-yapi-accent hover:byapi-accent-hover rounded-md transition-colors"
         >
           Run <span className="text-xs opacity-75">(⌘↵)</span>
         </button>
@@ -215,4 +224,3 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     </div>
   );
 }
-
