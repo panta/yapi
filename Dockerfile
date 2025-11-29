@@ -81,7 +81,7 @@ COPY --from=yapi_builder /usr/bin/curl /usr/bin/curl
 COPY --from=yapi_builder /usr/bin/git /usr/bin/git
 COPY --from=yapi_builder /usr/bin/fzf /usr/bin/fzf
 COPY --from=yapi_builder /usr/bin/grpcurl /usr/bin/grpcurl
-COPY --from=yapi_builder /bin/nc /bin/nc
+COPY --from=yapi_builder /usr/bin/nc /usr/bin/nc
 COPY --from=yapi_builder /bin/bash /bin/bash
 
 # Also copy shared libraries that these binaries might depend on.
