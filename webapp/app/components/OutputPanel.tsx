@@ -37,7 +37,7 @@ export default function OutputPanel({ result, isLoading }: OutputPanelProps) {
     <div className="h-full flex flex-col bg-yapi-output">
       {/* Curl Command Section */}
       <div className="border-b border-yapi-border">
-        <div className="px-4 py-2 bg-orange-50/50">
+        <div className="px-4 py-2 bg-yellow-50">
           <h3 className="text-xs font-semibold text-yapi-fg/60 uppercase tracking-wide mb-2">
             Equivalent Command
           </h3>
@@ -59,7 +59,7 @@ export default function OutputPanel({ result, isLoading }: OutputPanelProps) {
 
       {/* Response Section */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-4 px-4 py-2 border-b border-yapi-border bg-orange-50/30">
+        <div className="flex items-center gap-4 px-4 py-2 border-b border-yapi-border bg-yellow-50">
           <h3 className="text-xs font-semibold text-yapi-fg/60 uppercase tracking-wide">
             Response
           </h3>
@@ -91,7 +91,7 @@ export default function OutputPanel({ result, isLoading }: OutputPanelProps) {
               className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
                 activeTab === "response"
                   ? "bg-yapi-accent text-white"
-                  : "text-yapi-fg/60 hover:text-yapi-fg hover:bg-orange-50"
+                  : "text-yapi-fg/60 hover:text-yapi-fg hover:bg-yellow-50"
               }`}
             >
               Body
@@ -101,7 +101,7 @@ export default function OutputPanel({ result, isLoading }: OutputPanelProps) {
               className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
                 activeTab === "headers"
                   ? "bg-yapi-accent text-white"
-                  : "text-yapi-fg/60 hover:text-yapi-fg hover:bg-orange-50"
+                  : "text-yapi-fg/60 hover:text-yapi-fg hover:bg-yellow-50"
               }`}
             >
               Headers
@@ -140,7 +140,7 @@ export default function OutputPanel({ result, isLoading }: OutputPanelProps) {
                     {result.errorType}
                   </h4>
                   <p className="text-sm text-red-600">{result.error}</p>
-                  {result.details && (
+                  {!!result.details && (
                     <pre className="mt-2 text-xs font-mono text-red-500 whitespace-pre-wrap">
                       {JSON.stringify(result.details, null, 2)}
                     </pre>

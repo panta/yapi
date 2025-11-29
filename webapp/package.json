@@ -1,34 +1,36 @@
 {
-  "name": "webapp",
+  "name": "yapi-test",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --inspect",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
-    "@types/vscode": "^1.106.1",
-    "monaco-editor": "^0.55.1",
-    "monaco-languageclient": "^10.4.0",
-    "monaco-vim": "^0.4.4",
+    "ajv": "^8.17.1",
+    "monaco-editor": "^0.52.0",
     "monaco-yaml": "^5.4.0",
     "next": "16.0.5",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "vscode-jsonrpc": "^8.2.1",
+    "vscode-languageserver": "^9.0.1",
     "vscode-ws-jsonrpc": "^3.5.0",
+    "yaml": "^2.8.1",
     "zod": "^4.1.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "baseline-browser-mapping": "^2.8.32",
     "eslint": "^9",
     "eslint-config-next": "16.0.5",
+    "markdown-it": "^14.1.0",
     "monaco-editor-webpack-plugin": "^7.1.1",
     "tailwindcss": "^4",
     "typescript": "^5"

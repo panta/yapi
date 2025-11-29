@@ -4,7 +4,6 @@ import { useState } from "react";
 import OutputPanel from "./OutputPanel";
 import type { ExecuteResponse } from "../types/api-contract";
 
-// import Editor from "./Editor";
 import dynamic from "next/dynamic";
 const Editor = dynamic(() => import("./Editor"), { ssr: false });
 
@@ -16,6 +15,12 @@ export default function Playground() {
   const [yaml, setYaml] = useState(DEFAULT_YAML);
   const [result, setResult] = useState<ExecuteResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Clear results when user types
+  const handleYamlChange = (newYaml: string) => {
+    setYaml(newYaml);
+    setResult(null); // Clear previous results
+  };
 
   async function handleRun() {
     setIsLoading(true);
@@ -46,7 +51,7 @@ export default function Playground() {
   return (
     <div className="flex flex-col h-screen bg-yapi-bg">
       {/* Header */}
-      <header className="border-b border-yapi-border-dark bg-gradient-to-r from-orange-100 to-orange-50">
+      <header className="border-b border-yapi-border-dark bg-gradient-to-r from-yapi-header-from to-yapi-header-to">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -66,7 +71,7 @@ export default function Playground() {
               >
                 docs
               </a>
-              <button className="px-4 py-2 text-sm font-medium text-yapi-fg border border-yapi-border-dark rounded hover:bg-orange-50 transition-colors">
+              <button className="px-4 py-2 text-sm font-medium text-yapi-fg border border-yapi-border-dark rounded hover:bg-yellow-100 transition-colors">
                 share
               </button>
             </div>
@@ -78,7 +83,7 @@ export default function Playground() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Editor */}
         <div className="w-1/2 border-r border-yapi-border-dark">
-          <Editor value={yaml} onChange={setYaml} onRun={handleRun} />
+          <Editor value={yaml} onChange={handleYamlChange} onRun={handleRun} />
         </div>
 
         {/* Right Panel - Output */}

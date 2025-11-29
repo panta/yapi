@@ -5,17 +5,19 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Light Orange Theme Colors */
-  --color-yapi-bg: #fff8f0;
-  --color-yapi-fg: #2d1810;
+  /* Vibrant Orange/Yellow Theme Colors */
+  --color-yapi-bg: #fffbf0;
+  --color-yapi-fg: #1a1a1a;
   --color-yapi-editor: #ffffff;
-  --color-yapi-output: #fffaf5;
-  --color-yapi-border: #fed7aa;
-  --color-yapi-border-dark: #fdba74;
+  --color-yapi-output: #fffef9;
+  --color-yapi-border: #fbbf24;
+  --color-yapi-border-dark: #f59e0b;
   --color-yapi-accent: #f97316;
   --color-yapi-accent-hover: #ea580c;
   --color-yapi-success: #10b981;
   --color-yapi-error: #ef4444;
+  --color-yapi-header-from: #fff3cd;
+  --color-yapi-header-to: #ffe4a3;
 }
 
 body {
@@ -24,21 +26,21 @@ body {
   font-family: theme(fontFamily.sans);
 }
 
-/* Custom scrollbar - fun orange theme */
+/* Custom scrollbar - vibrant orange/yellow theme */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #ffedd5;
+  background: #fef3c7;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #fb923c;
+  background: #fbbf24;
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #f97316;
+  background: #f59e0b;
 }
