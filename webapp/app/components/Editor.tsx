@@ -5,48 +5,6 @@
 import MonacoEditor, { Monaco, BeforeMount } from "@monaco-editor/react";
 import { useRef, useEffect, useState } from "react";
 import type { editor } from "monaco-editor";
-import {
-  CloseAction,
-  ErrorAction,
-  MonacoLanguageClient,
-} from "monaco-languageclient";
-import {
-  MessageReader,
-  MessageWriter,
-} from "vscode-ws-jsonrpc";
-import { toSocket, WebSocketMessageReader, WebSocketMessageWriter } from 'vscode-ws-jsonrpc';
-import yapiSchema from "../../yapi.schema.json";
-
-function createLanguageClient(
-  transports: any,
-): MonacoLanguageClient {
-  return new MonacoLanguageClient({
-    name: "YAML Language Client",
-    clientOptions: {
-      documentSelector: ["yaml"],
-      errorHandler: {
-        error: () => ({ action: ErrorAction.Continue }),
-        closed: () => ({ action: CloseAction.DoNotRestart }),
-      },
-      // "workaround" for missing schemas property
-      // https://github.com/microsoft/vscode-languageserver-node/issues/1314#issuecomment-1847683435
-      initializationOptions: {
-        schemas: [
-          {
-            uri: "https://pond.audio/yapi/schema",
-            fileMatch: ["yapi.yaml", "**/yapi.yaml"],
-            schema: yapiSchema,
-          },
-        ],
-      },
-    },
-    connectionProvider: {
-      get: () => {
-        return Promise.resolve(transports);
-      },
-    },
-  });
-}
 
 interface EditorProps {
   value: string;
@@ -123,17 +81,8 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
       mimetypes: ["application/x-yaml"],
     });
 
-    const yamlWorker = new Worker(
-      new URL("monaco-yaml/yaml.worker", import.meta.url),
-      { type: "module" },
-    );
-
-    const reader = new MessageReader(yamlWorker);
-    const writer = new MessageWriter(yamlWorker);
-    const languageClient = createLanguageClient({ reader, writer });
-    languageClient.start();
-
-    reader.onClose(() => languageClient.stop());
+    // monaco-yaml handles the worker and language client internally
+    // Configure it through the yaml service configuration instead
   };
 
   async function handleEditorDidMount(
