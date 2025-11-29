@@ -13,8 +13,10 @@ interface EditorProps {
 const VIM_MODE_KEY = "yapi-vim-mode";
 
 export default function Editor({ value, onChange, onRun }: EditorProps) {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const monacoRef = useRef<Monaco | null>(null);
+  const [editor, setEditor] = useState<editor.IStandaloneCodeEditor | null>(
+    null
+  );
+  const [monaco, setMonaco] = useState<Monaco | null>(null);
   const onRunRef = useRef(onRun);
   const vimModeRef = useRef<any>(null);
 
@@ -40,16 +42,13 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
 
   // Toggle vim mode on/off
   useEffect(() => {
-    if (!editorRef.current || !monacoRef.current) return;
+    if (!editor || !monaco) return;
 
     const enableVimMode = async () => {
       if (vimEnabled && !vimModeRef.current) {
         const { initVimMode } = await import("monaco-vim");
         const statusNode = document.getElementById("vim-status");
-        vimModeRef.current = initVimMode(
-          editorRef.current!,
-          statusNode || undefined
-        );
+        vimModeRef.current = initVimMode(editor, statusNode || undefined);
       } else if (!vimEnabled && vimModeRef.current) {
         vimModeRef.current.dispose();
         vimModeRef.current = null;
@@ -57,7 +56,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     };
 
     enableVimMode();
-  }, [vimEnabled, editorRef.current]);
+  }, [vimEnabled, editor, monaco]);
 
   const handleEditorWillMount: BeforeMount = async (monaco) => {
     // Define custom theme with orange cursor
@@ -92,17 +91,17 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   };
 
   async function handleEditorDidMount(
-    editor: editor.IStandaloneCodeEditor,
-    monaco: Monaco
+    editorInstance: editor.IStandaloneCodeEditor,
+    monacoInstance: Monaco
   ) {
-    editorRef.current = editor;
-    monacoRef.current = monaco;
+    setEditor(editorInstance);
+    setMonaco(monacoInstance);
 
     // Add keyboard shortcut: Cmd+Enter or Ctrl+Enter to run
     // Use ref to always call the latest onRun callback
-    editor.addCommand(
+    editorInstance.addCommand(
       // eslint-disable-next-line no-bitwise
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter,
       () => {
         onRunRef.current();
       }
