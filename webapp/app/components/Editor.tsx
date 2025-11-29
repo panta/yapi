@@ -1,17 +1,38 @@
+// app/components/Editor.tsx
+
 "use client";
 
 import MonacoEditor, { Monaco, BeforeMount } from "@monaco-editor/react";
 import { useRef, useEffect, useState } from "react";
 import type { editor } from "monaco-editor";
 
-function ClientOnly({ children }: { children: React.ReactNode }) {
-  const [isClient, setIsClient] = useState(false);
+// import your JSON schema as an object
+// (tsconfig has "resolveJsonModule": true, so this is allowed)
+import yapiSchema from "../../yapi.schema.json";
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  return isClient ? <>{children}</> : null;
+// Tell Monaco how to spawn workers, including monaco-yaml's worker.
+// This must run on the client.
+if (typeof window !== "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).MonacoEnvironment = {
+    getWorker(_: string, label: string) {
+      switch (label) {
+        case "yaml":
+          // monaco-yaml LSP worker (does validation, completion, formatting)
+          return new Worker(
+            new URL("monaco-yaml/yaml.worker", import.meta.url),
+          );
+        default:
+          // normal Monaco editor worker
+          return new Worker(
+            new URL(
+              "monaco-editor/esm/vs/editor/editor.worker",
+              import.meta.url,
+            ),
+          );
+      }
+    },
+  };
 }
 
 interface EditorProps {
@@ -20,57 +41,57 @@ interface EditorProps {
   onRun: () => void;
 }
 
-
 const VIM_MODE_KEY = "yapi-vim-mode";
 
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => setIsClient(true), []);
+  return isClient ? <>{children}</> : null;
+}
+
 export default function Editor({ value, onChange, onRun }: EditorProps) {
-  const [editor, setEditor] = useState<editor.IStandaloneCodeEditor | null>(
-    null
-  );
-  const [monaco, setMonaco] = useState<Monaco | null>(null);
+  const [editorInstance, setEditorInstance] =
+    useState<editor.IStandaloneCodeEditor | null>(null);
+  const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
   const onRunRef = useRef(onRun);
   const vimModeRef = useRef<any>(null);
-
   const [vimEnabled, setVimEnabled] = useState(false);
 
-  // Load vim mode from localStorage on client-side
+  // load vim preference
   useEffect(() => {
     const stored = localStorage.getItem(VIM_MODE_KEY);
     setVimEnabled(stored === "true");
   }, []);
 
-  // Keep the ref updated with the latest onRun callback
   useEffect(() => {
     onRunRef.current = onRun;
   }, [onRun]);
 
-  // Save vim mode preference to localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem(VIM_MODE_KEY, String(vimEnabled));
     }
   }, [vimEnabled]);
 
-  // Toggle vim mode on/off
   useEffect(() => {
-    if (!editor || !monaco) return;
+    if (!editorInstance || !monacoInstance) return;
 
     const enableVimMode = async () => {
       if (vimEnabled && !vimModeRef.current) {
         const { initVimMode } = await import("monaco-vim");
         const statusNode = document.getElementById("vim-status");
-        vimModeRef.current = initVimMode(editor, statusNode || undefined);
+        vimModeRef.current = initVimMode(editorInstance, statusNode || undefined);
       } else if (!vimEnabled && vimModeRef.current) {
         vimModeRef.current.dispose();
         vimModeRef.current = null;
       }
     };
 
-    enableVimMode();
-  }, [vimEnabled, editor, monaco]);
+    void enableVimMode();
+  }, [vimEnabled, editorInstance, monacoInstance]);
 
   const handleEditorWillMount: BeforeMount = async (monaco) => {
-    // Define custom theme with orange cursor
+    // your theme as before
     monaco.editor.defineTheme("yapi-light", {
       base: "vs",
       inherit: true,
@@ -83,42 +104,47 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
       },
     });
 
-    // Import and configure monaco-yaml
     const { configureMonacoYaml } = await import("monaco-yaml");
 
+    // ONLY your custom schema, no generic YAML / schema-store fetches
     configureMonacoYaml(monaco, {
-      enableSchemaRequest: true,
-      hover: true,
       completion: true,
+      hover: true,
       validate: true,
-      format: true,
+      format: true,          // enable Prettier-based formatting
+      enableSchemaRequest: false, // do not fetch anything from remote
       schemas: [
         {
-          uri: "/yapi.schema.json",
-          fileMatch: ["*"],
+          // pseudo URI for the schema
+          uri: "https://pond.audio/yapi/schema",
+          // which models this schema applies to
+          fileMatch: ["**/yapi.yaml", "*"],
+          // inline schema object from yapi.schema.json
+          schema: yapiSchema as any,
         },
       ],
     });
   };
 
   async function handleEditorDidMount(
-    editorInstance: editor.IStandaloneCodeEditor,
-    monacoInstance: Monaco
+    editor: editor.IStandaloneCodeEditor,
+    monaco: Monaco,
   ) {
-    setEditor(editorInstance);
-    setMonaco(monacoInstance);
+    setEditorInstance(editor);
+    setMonacoInstance(monaco);
 
-    // Add keyboard shortcut: Cmd+Enter or Ctrl+Enter to run
-    // Use ref to always call the latest onRun callback
-    editorInstance.addCommand(
-      // eslint-disable-next-line no-bitwise
-      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter,
-      () => {
-        onRunRef.current();
-      }
+    // run on Cmd/Ctrl + Enter
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+      () => onRunRef.current(),
+    );
+
+    // format with Shift+Alt+F (uses monaco-yaml / Prettier)
+    editor.addCommand(
+      monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF,
+      () => editor.getAction("editor.action.formatDocument")?.run(),
     );
   }
-
 
   return (
     <div className="h-full flex flex-col bg-yapi-editor">
@@ -151,6 +177,8 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
           <MonacoEditor
             height="100%"
             defaultLanguage="yaml"
+            // Give the model a path that matches fileMatch above
+            path="yapi.yaml"
             value={value}
             onChange={(newValue) => onChange(newValue || "")}
             beforeMount={handleEditorWillMount}
@@ -186,3 +214,4 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     </div>
   );
 }
+
