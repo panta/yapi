@@ -1,14 +1,25 @@
 "use client";
 
-import MonacoEditor, { Monaco, BeforeMount, loader } from "@monaco-editor/react";
+import MonacoEditor, { Monaco, BeforeMount } from "@monaco-editor/react";
 import { useRef, useEffect, useState } from "react";
 import type { editor } from "monaco-editor";
+
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  return isClient ? <>{children}</> : null;
+}
 
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
   onRun: () => void;
 }
+
 
 const VIM_MODE_KEY = "yapi-vim-mode";
 
@@ -136,40 +147,42 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
         </button>
       </div>
       <div className="flex-1 overflow-hidden">
-        <MonacoEditor
-          height="100%"
-          defaultLanguage="yaml"
-          value={value}
-          onChange={(newValue) => onChange(newValue || "")}
-          beforeMount={handleEditorWillMount}
-          onMount={handleEditorDidMount}
-          theme="yapi-light"
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            lineNumbers: "on",
-            scrollBeyondLastLine: false,
-            wordWrap: "on",
-            automaticLayout: true,
-            tabSize: 2,
-            insertSpaces: true,
-            fontFamily: "var(--font-geist-mono), Monaco, monospace",
-            padding: { top: 16, bottom: 16 },
-            renderLineHighlight: "all",
-            bracketPairColorization: {
-              enabled: true,
-            },
-          }}
-        />
-      </div>
-      {vimEnabled && (
-        <div className="px-4 py-1 border-t border-yapi-border bg-orange-50/50">
-          <div
-            id="vim-status"
-            className="text-xs font-mono text-yapi-fg/60"
+        <ClientOnly>
+          <MonacoEditor
+            height="100%"
+            defaultLanguage="yaml"
+            value={value}
+            onChange={(newValue) => onChange(newValue || "")}
+            beforeMount={handleEditorWillMount}
+            onMount={handleEditorDidMount}
+            theme="yapi-light"
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              lineNumbers: "on",
+              scrollBeyondLastLine: false,
+              wordWrap: "on",
+              automaticLayout: true,
+              tabSize: 2,
+              insertSpaces: true,
+              fontFamily: "var(--font-geist-mono), Monaco, monospace",
+              padding: { top: 16, bottom: 16 },
+              renderLineHighlight: "all",
+              bracketPairColorization: {
+                enabled: true,
+              },
+            }}
           />
-        </div>
-      )}
+          {vimEnabled && (
+            <div className="px-4 py-1 border-t border-yapi-border bg-orange-50/50">
+              <div
+                id="vim-status"
+                className="text-xs font-mono text-yapi-fg/60"
+              />
+            </div>
+          )}
+        </ClientOnly>
+      </div>
     </div>
   );
 }
