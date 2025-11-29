@@ -18,14 +18,13 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   const onRunRef = useRef(onRun);
   const vimModeRef = useRef<any>(null);
 
-  const [vimEnabled, setVimEnabled] = useState(() => {
-    // Load vim mode preference from localStorage on mount
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(VIM_MODE_KEY);
-      return stored === "true";
-    }
-    return false;
-  });
+  const [vimEnabled, setVimEnabled] = useState(false);
+
+  // Load vim mode from localStorage on client-side
+  useEffect(() => {
+    const stored = localStorage.getItem(VIM_MODE_KEY);
+    setVimEnabled(stored === "true");
+  }, []);
 
   // Keep the ref updated with the latest onRun callback
   useEffect(() => {
