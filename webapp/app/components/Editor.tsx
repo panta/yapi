@@ -1,10 +1,73 @@
+"use client";
 // app/components/Editor.tsx
 
-"use client";
 
 import MonacoEditor, { Monaco, BeforeMount } from "@monaco-editor/react";
 import { useRef, useEffect, useState } from "react";
-import type { editor } from "monaco-editor";
+import { Uri, type editor } from "monaco-editor";
+import {
+  WebSocketMessageReader,
+  WebSocketMessageWriter,
+  toSocket,
+} from "vscode-ws-jsonrpc";
+// import yapiSchema from "../../yapi.schema.json";
+
+
+// import * as vscode from 'vscode';
+import { EditorApp, type EditorAppConfig } from 'monaco-languageclient/editorApp';
+import { configureDefaultWorkerFactory } from 'monaco-languageclient/workerFactory';
+import { MonacoVscodeApiWrapper, type MonacoVscodeApiConfig } from 'monaco-languageclient/vscodeApiWrapper';
+import { LanguageClientWrapper, type LanguageClientConfig } from 'monaco-languageclient/lcwrapper';
+
+async function createEditorAndLanguageClient() {
+    const languageId = 'mylang';
+
+    // Monaco VSCode API configuration
+    const vscodeApiConfig: MonacoVscodeApiConfig = {
+        $type: 'extended',
+        viewsConfig: {
+            $type: 'EditorService'
+        },
+        userConfiguration: {
+            json: JSON.stringify({
+                'workbench.colorTheme': 'Default Dark Modern',
+                'editor.wordBasedSuggestions': 'off'
+            })
+        },
+        monacoWorkerFactory: configureDefaultWorkerFactory
+    };
+
+    // Language client configuration
+    const languageClientConfig: LanguageClientConfig = {
+        languageId: languageId,
+        connection: {
+            options: {
+                $type: 'WebSocketUrl',
+                // at this url the language server for myLang must be reachable
+                url: 'ws://localhost:30000/myLangLS'
+            }
+        },
+        clientOptions: {
+            documentSelector: [languageId],
+            workspaceFolder: {
+                index: 0,
+                name: 'workspace',
+                uri: Uri.file('/workspace')
+            }
+        }
+    };
+
+
+    // Create the monaco-vscode api Wrapper and start it before anything else
+    const apiWrapper = new MonacoVscodeApiWrapper(vscodeApiConfig);
+    await apiWrapper.start();
+
+    // Create language client wrapper
+    const lcWrapper = new LanguageClientWrapper(languageClientConfig);
+    await lcWrapper.start();
+    return { lcWrapper, apiWrapper };
+}
+
 
 interface EditorProps {
   value: string;
@@ -74,15 +137,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
       },
     });
 
-    monaco.languages.register({
-      id: "yaml",
-      extensions: [".yaml", ".yml"],
-      aliases: ["YAML", "yaml"],
-      mimetypes: ["application/x-yaml"],
-    });
-
-    // monaco-yaml handles the worker and language client internally
-    // Configure it through the yaml service configuration instead
+    // console.log('Language Client:', languageClient);
   };
 
   async function handleEditorDidMount(

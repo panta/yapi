@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Editor from "./Editor";
 import OutputPanel from "./OutputPanel";
 import type { ExecuteResponse } from "../types/api-contract";
+
+// import Editor from "./Editor";
+import dynamic from "next/dynamic";
+const Editor = dynamic(() => import("./Editor"), { ssr: false });
 
 const DEFAULT_YAML = `url: https://api.github.com/users/octocat
 method: GET
