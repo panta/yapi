@@ -19,14 +19,15 @@ if (typeof window !== "undefined") {
       switch (label) {
         case "yaml":
           // monaco-yaml LSP worker (does validation, completion, formatting)
+          // Using a local wrapper to work around Turbopack bundling issues
           return new Worker(
-            new URL("monaco-yaml/yaml.worker", import.meta.url),
+            new URL("../yaml.worker.ts", import.meta.url),
           );
         default:
           // normal Monaco editor worker
           return new Worker(
             new URL(
-              "monaco-editor/esm/vs/editor/editor.worker",
+              "monaco-editor/esm/vs/editor/editor.worker.js",
               import.meta.url,
             ),
           );
