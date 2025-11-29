@@ -88,6 +88,9 @@ COPY --from=yapi_builder /bin/bash /bin/bash
 COPY --from=yapi_builder /lib /lib
 COPY --from=yapi_builder /usr/lib /usr/lib
 
+# Copy SSL certificates for curl to verify HTTPS connections
+COPY --from=yapi_builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 
 # Add yapi to the PATH
 ENV PATH="/usr/local/bin/yapi_dist:${PATH}"
