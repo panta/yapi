@@ -1,7 +1,7 @@
 "use client";
 
-import MonacoEditor, { Monaco } from "@monaco-editor/react";
-import { useEffect, useRef } from "react";
+import MonacoEditor, { Monaco, BeforeMount, loader } from "@monaco-editor/react";
+import { useRef } from "react";
 import type { editor } from "monaco-editor";
 
 interface EditorProps {
@@ -10,15 +10,28 @@ interface EditorProps {
   onRun: () => void;
 }
 
-const DEFAULT_YAML = `url: https://api.github.com/users/octocat
-method: GET
-headers:
-  Accept: application/json
-`;
-
 export default function Editor({ value, onChange, onRun }: EditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+
+  const handleEditorWillMount: BeforeMount = async (monaco) => {
+    // Import and configure monaco-yaml
+    const { configureMonacoYaml } = await import("monaco-yaml");
+
+    configureMonacoYaml(monaco, {
+      enableSchemaRequest: true,
+      hover: true,
+      completion: true,
+      validate: true,
+      format: true,
+      schemas: [
+        {
+          uri: "https://pond.audio/yapi/schema",
+          fileMatch: ["*"],
+        },
+      ],
+    });
+  };
 
   function handleEditorDidMount(
     editor: editor.IStandaloneCodeEditor,
@@ -37,12 +50,6 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     );
   }
 
-  useEffect(() => {
-    // Set initial value if empty
-    if (!value) {
-      onChange(DEFAULT_YAML);
-    }
-  }, [value, onChange]);
 
   return (
     <div className="h-full flex flex-col bg-yapi-editor">
@@ -63,6 +70,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
           defaultLanguage="yaml"
           value={value}
           onChange={(newValue) => onChange(newValue || "")}
+          beforeMount={handleEditorWillMount}
           onMount={handleEditorDidMount}
           theme="vs-light"
           options={{

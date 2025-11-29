@@ -5,8 +5,12 @@ import Editor from "./Editor";
 import OutputPanel from "./OutputPanel";
 import type { ExecuteResponse } from "../types/api-contract";
 
+const DEFAULT_YAML = `url: https://api.github.com/users/octocat
+method: GET
+`;
+
 export default function Playground() {
-  const [yaml, setYaml] = useState("");
+  const [yaml, setYaml] = useState(DEFAULT_YAML);
   const [result, setResult] = useState<ExecuteResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
