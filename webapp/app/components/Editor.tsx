@@ -42,7 +42,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     if (!value) {
       onChange(DEFAULT_YAML);
     }
-  }, []);
+  }, [value, onChange]);
 
   return (
     <div className="h-full flex flex-col bg-yapi-editor">

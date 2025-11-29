@@ -37,15 +37,28 @@ export async function POST(request: NextRequest) {
 
     const { yaml } = parseResult.data;
 
+    // Validate that we have content
+    if (!yaml || yaml.trim().length === 0) {
+      const errorResponse = ExecuteErrorResponseSchema.parse({
+        success: false,
+        error: "YAML content is empty",
+        errorType: "VALIDATION_ERROR",
+      });
+      return NextResponse.json(errorResponse, { status: 400 });
+    }
+
     // Write YAML to temporary file
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(7);
     tempFile = join(tmpdir(), `yapi-${timestamp}-${randomId}.yaml`);
     await writeFile(tempFile, yaml, "utf-8");
 
+    console.log("Executing yapi with file:", tempFile);
+    console.log("YAML content:", yaml);
+
     // Execute yapi command with timing
     const startTime = Date.now();
-    const { stdout, stderr } = await execAsync(`yapi "${tempFile}"`, {
+    const { stdout, stderr } = await execAsync(`yapi -c "${tempFile}"`, {
       timeout: 30000, // 30 second timeout
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
     });
