@@ -83,7 +83,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
       format: true,
       schemas: [
         {
-          uri: "https://pond.audio/yapi/schema",
+          uri: "/yapi.schema.json",
           fileMatch: ["*"],
         },
       ],
