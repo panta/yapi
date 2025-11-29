@@ -15,3 +15,5 @@ json: |
       "foo": "bar"
     }
   }
+
+jq_filter: .json.nested
