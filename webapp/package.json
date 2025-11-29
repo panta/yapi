@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run cp:depends && next dev",
     "cp:depends": "cp ../.depends .",
     "build": "next build",
     "start": "next start",
