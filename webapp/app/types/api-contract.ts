@@ -39,7 +39,7 @@ export const ExecuteSuccessResponseSchema = z.object({
   responseBody: z.unknown(),
 
   /** Response headers as key-value pairs */
-  responseHeaders: z.map(z.string(), z.string()),
+  responseHeaders: z.record(z.string(), z.string()),
 
   /** HTTP status code */
   statusCode: z.number(),

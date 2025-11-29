@@ -1,9 +1,8 @@
 "use client";
 
-import MonacoEditor from "@monaco-editor/react";
+import MonacoEditor, { Monaco } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
 import type { editor } from "monaco-editor";
-import * as monaco from "monaco-editor";
 
 interface EditorProps {
   value: string;
@@ -19,9 +18,14 @@ headers:
 
 export default function Editor({ value, onChange, onRun }: EditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
 
-  function handleEditorDidMount(editor: editor.IStandaloneCodeEditor) {
+  function handleEditorDidMount(
+    editor: editor.IStandaloneCodeEditor,
+    monaco: Monaco
+  ) {
     editorRef.current = editor;
+    monacoRef.current = monaco;
 
     // Add keyboard shortcut: Cmd+Enter or Ctrl+Enter to run
     editor.addCommand(

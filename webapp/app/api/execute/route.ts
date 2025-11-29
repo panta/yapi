@@ -45,11 +45,11 @@ export async function POST(request: NextRequest) {
         blog: "https://github.blog",
         bio: null,
       },
-      responseHeaders: new Map([
-        ["content-type", "application/json; charset=utf-8"],
-        ["x-ratelimit-limit", "60"],
-        ["x-ratelimit-remaining", "59"],
-      ]),
+      responseHeaders: {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "60",
+        "x-ratelimit-remaining": "59",
+      },
       statusCode: 200,
       timing: 245,
     });
