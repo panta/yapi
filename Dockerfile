@@ -97,15 +97,13 @@ ENV PATH="/usr/local/bin/yapi_dist:${PATH}"
 # Copy Next.js application files
 COPY --from=builder /app/public ./public
 
-# Copy standalone output and static files, ensuring correct ownership
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy build output instead of standalone dir
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=deps    --chown=nextjs:nodejs /app/node_modules ./node_modules
 
-# Switch to the non-root user
 USER nextjs
 
 EXPOSE 3000
 
-# The CMD should reference the server file inside the standalone output
-CMD ["bun", "server.js"]
+CMD ["bun", "run", "start"]
