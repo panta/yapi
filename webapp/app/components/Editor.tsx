@@ -57,7 +57,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     };
 
     enableVimMode();
-  }, [vimEnabled]);
+  }, [vimEnabled, editorRef.current]);
 
   const handleEditorWillMount: BeforeMount = async (monaco) => {
     // Define custom theme with orange cursor
@@ -107,13 +107,6 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
         onRunRef.current();
       }
     );
-
-    // Initialize vim mode if enabled
-    if (vimEnabled && !vimModeRef.current) {
-      const { initVimMode } = await import("monaco-vim");
-      const statusNode = document.getElementById("vim-status");
-      vimModeRef.current = initVimMode(editor, statusNode || undefined);
-    }
   }
 
 
