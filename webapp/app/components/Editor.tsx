@@ -61,6 +61,19 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   }, [vimEnabled]);
 
   const handleEditorWillMount: BeforeMount = async (monaco) => {
+    // Define custom theme with orange cursor
+    monaco.editor.defineTheme("yapi-light", {
+      base: "vs",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editorCursor.foreground": "#f97316",
+        "editor.lineHighlightBackground": "#fff8f0",
+        "editor.selectionBackground": "#fed7aa80",
+        "editor.inactiveSelectionBackground": "#ffedd580",
+      },
+    });
+
     // Import and configure monaco-yaml
     const { configureMonacoYaml } = await import("monaco-yaml");
 
@@ -139,7 +152,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
           onChange={(newValue) => onChange(newValue || "")}
           beforeMount={handleEditorWillMount}
           onMount={handleEditorDidMount}
-          theme="vs-light"
+          theme="yapi-light"
           options={{
             minimap: { enabled: false },
             fontSize: 14,
