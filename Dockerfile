@@ -63,7 +63,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME="0.0.0.0"
+    HOSTNAME="0.0.0.0" \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
