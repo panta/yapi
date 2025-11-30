@@ -7,7 +7,12 @@
     "cp:depends": "cp ../.depends .",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run --config vitest.config.node.mts && vitest run --config vitest.config.browser.mts",
+    "test:node": "vitest run --config vitest.config.node.mts",
+    "test:browser": "vitest run --config vitest.config.browser.mts",
+    "test:watch:node": "vitest --config vitest.config.node.mts",
+    "test:watch:browser": "vitest --config vitest.config.browser.mts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -15,6 +20,7 @@
     "monaco-editor": "^0.52.0",
     "monaco-yaml": "^5.4.0",
     "next": "16.0.5",
+    "pako": "^2.1.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "vscode-languageserver": "^9.0.1",
@@ -24,16 +30,24 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.0",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^20",
+    "@types/pako": "^2.0.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/ui": "^4.0.14",
     "baseline-browser-mapping": "^2.8.32",
     "eslint": "^9",
     "eslint-config-next": "16.0.5",
+    "jsdom": "^27.2.0",
     "markdown-it": "^14.1.0",
     "monaco-editor-webpack-plugin": "^7.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.0.14"
   }
 }
