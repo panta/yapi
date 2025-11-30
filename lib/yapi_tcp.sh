@@ -1,14 +1,12 @@
-# yapi_tcp.sh - TCP request handling (using ncat)
+# yapi_tcp.sh - TCP request handling
 
 # Execute TCP request
 execute_tcp_request() {
   local config="$1"
   local url="$2"
 
-  # Dependency: ncat (modern netcat from nmap)
-  # macOS:  brew install nmap        (provides ncat)
-  # Alpine: apk add nmap-ncat
-  check_dependency "ncat" "Install ncat: brew install nmap (macOS) or apk add nmap-ncat (Alpine)"
+  # Check dependency
+  check_dependency "socat" "Install socat: brew install socat (macOS)"
 
   # Extract host and port from URL
   local server_addr
@@ -23,9 +21,7 @@ execute_tcp_request() {
     error_exit "TCP port is required in URL (tcp://host:port)"
   fi
 
-  # Prepare data to send:
-  # - prefer .data
-  # - fall back to .body (JSON) if present
+  # Prepare data to send
   local send_data=""
   if [[ -n "$TCP_DATA" ]]; then
     send_data="$TCP_DATA"
@@ -33,11 +29,11 @@ execute_tcp_request() {
     send_data=$(yq e '.body' -o=json "$config")
   fi
 
-  # Decode according to .encoding
+  # Handle encoding
   if [[ "$TCP_ENCODING" == "hex" ]]; then
-    send_data=$(printf "%s" "$send_data" | xxd -r -p)
+    send_data=$(echo -n "$send_data" | xxd -r -p)
   elif [[ "$TCP_ENCODING" == "base64" ]]; then
-    send_data=$(printf "%s" "$send_data" | base64 -d)
+    send_data=$(echo -n "$send_data" | base64 -d)
   fi
 
   echo "Executing TCP request to $tcp_host:$tcp_port" >&2
@@ -46,17 +42,12 @@ execute_tcp_request() {
   fi
 
   local start_time end_time elapsed_ms response
-
   start_time=$(date +%s%N)
 
-  # ncat timeout (-w) is in seconds, same as nc usage before
-  local ncat_args=(-w "$TCP_READ_TIMEOUT")
-
   if [[ -n "$send_data" ]]; then
-    # printf avoids echo -n weirdness with escapes
-    response=$(printf "%s" "$send_data" | ncat "${ncat_args[@]}" "$tcp_host" "$tcp_port" 2>&1)
+    response=$(echo -n "$send_data" | socat -T "$TCP_READ_TIMEOUT" - "TCP:$tcp_host:$tcp_port")
   else
-    response=$(ncat "${ncat_args[@]}" "$tcp_host" "$tcp_port" 2>&1 </dev/null)
+    response=$(socat -T "$TCP_READ_TIMEOUT" - "TCP:$tcp_host:$tcp_port")
   fi
 
   end_time=$(date +%s%N)

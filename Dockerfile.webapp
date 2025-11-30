@@ -28,7 +28,7 @@ FROM alpine:latest AS yapi_tester
 
 # Install dependencies for yapi and for testing
 RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing grpcurl \
-    && apk add --no-cache bash curl jq yq git fzf netcat-openbsd bats-core
+    && apk add --no-cache bash curl jq yq git fzf socat bats-core
 
 WORKDIR /app
 
@@ -112,7 +112,7 @@ COPY --from=yapi_builder /usr/bin/curl /usr/bin/curl
 COPY --from=yapi_builder /usr/bin/git /usr/bin/git
 COPY --from=yapi_builder /usr/bin/fzf /usr/bin/fzf
 COPY --from=yapi_builder /usr/bin/grpcurl /usr/bin/grpcurl
-COPY --from=yapi_builder /usr/bin/ncat /usr/bin/ncat
+COPY --from=yapi_builder /usr/bin/socat /usr/bin/socat
 COPY --from=yapi_builder /bin/bash /bin/bash
 
 # Copy bats-core for running tests via the API
