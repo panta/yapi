@@ -1,13 +1,14 @@
-#!/bin/bash
-# yapi_tcp.sh - TCP request handling
+# yapi_tcp.sh - TCP request handling (using ncat)
 
 # Execute TCP request
 execute_tcp_request() {
   local config="$1"
   local url="$2"
 
-  # Check dependency
-  check_dependency "nc" "Install netcat: brew install netcat (macOS)"
+  # Dependency: ncat (modern netcat from nmap)
+  # macOS:  brew install nmap        (provides ncat)
+  # Alpine: apk add nmap-ncat
+  check_dependency "ncat" "Install ncat: brew install nmap (macOS) or apk add nmap-ncat (Alpine)"
 
   # Extract host and port from URL
   local server_addr
@@ -22,7 +23,9 @@ execute_tcp_request() {
     error_exit "TCP port is required in URL (tcp://host:port)"
   fi
 
-  # Prepare data to send
+  # Prepare data to send:
+  # - prefer .data
+  # - fall back to .body (JSON) if present
   local send_data=""
   if [[ -n "$TCP_DATA" ]]; then
     send_data="$TCP_DATA"
@@ -30,11 +33,11 @@ execute_tcp_request() {
     send_data=$(yq e '.body' -o=json "$config")
   fi
 
-  # Handle encoding
+  # Decode according to .encoding
   if [[ "$TCP_ENCODING" == "hex" ]]; then
-    send_data=$(echo -n "$send_data" | xxd -r -p)
+    send_data=$(printf "%s" "$send_data" | xxd -r -p)
   elif [[ "$TCP_ENCODING" == "base64" ]]; then
-    send_data=$(echo -n "$send_data" | base64 -d)
+    send_data=$(printf "%s" "$send_data" | base64 -d)
   fi
 
   echo "Executing TCP request to $tcp_host:$tcp_port" >&2
@@ -43,14 +46,17 @@ execute_tcp_request() {
   fi
 
   local start_time end_time elapsed_ms response
+
   start_time=$(date +%s%N)
 
-  local nc_args=(-w "$TCP_READ_TIMEOUT")
+  # ncat timeout (-w) is in seconds, same as nc usage before
+  local ncat_args=(-w "$TCP_READ_TIMEOUT")
 
   if [[ -n "$send_data" ]]; then
-    response=$(echo -n "$send_data" | nc "${nc_args[@]}" "$tcp_host" "$tcp_port" 2>&1)
+    # printf avoids echo -n weirdness with escapes
+    response=$(printf "%s" "$send_data" | ncat "${ncat_args[@]}" "$tcp_host" "$tcp_port" 2>&1)
   else
-    response=$(nc "${nc_args[@]}" "$tcp_host" "$tcp_port" 2>&1 </dev/null)
+    response=$(ncat "${ncat_args[@]}" "$tcp_host" "$tcp_port" 2>&1 </dev/null)
   fi
 
   end_time=$(date +%s%N)
@@ -59,3 +65,4 @@ execute_tcp_request() {
   print_response "$response"
   print_timing "$elapsed_ms"
 }
+
