@@ -23,17 +23,14 @@ http_build_url() {
     full_url="$base_url"
   fi
 
-  # Build query string if present
+  # Build query string if present (using safe extraction to prevent yq injection)
   if [[ "$query_exists" == "true" ]]; then
     local query_string=""
     local first=true
-    local keys
-    keys=$(yq e '.query | keys | .[]' "$config")
 
-    while IFS= read -r key; do
+    # Safe extraction: get all key-value pairs at once without interpolating user input into yq expressions
+    while IFS=$'\t' read -r key value; do
       if [[ -n "$key" ]]; then
-        local value
-        value=$(yq e ".query[\"$key\"]" "$config")
         local encoded_key
         encoded_key=$(printf "%s" "$key" | jq -Rr @uri)
         local encoded_value
@@ -46,7 +43,7 @@ http_build_url() {
           query_string="${query_string}&${encoded_key}=${encoded_value}"
         fi
       fi
-    done <<< "$keys"
+    done < <(yq e '.query | to_entries | .[] | [.key, .value] | @tsv' "$config")
 
     full_url="${full_url}${query_string}"
   fi

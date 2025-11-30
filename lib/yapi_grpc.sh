@@ -75,17 +75,14 @@ execute_grpc_request() {
     grpcurl_args+=(-insecure)
   fi
 
-  # Add metadata headers
+  # Add metadata headers (using safe extraction to prevent yq injection)
   if [[ "$GRPC_METADATA_EXISTS" == "true" ]]; then
-    local metadata_keys
-    metadata_keys=$(yq e '.metadata | keys | .[]' "$config")
-    while IFS= read -r key; do
+    # Safe extraction: get all key-value pairs at once without interpolating user input into yq expressions
+    while IFS=$'\t' read -r key value; do
       if [[ -n "$key" ]]; then
-        local value
-        value=$(yq e ".metadata[\"$key\"]" "$config")
         grpcurl_args+=(-H "$key: $value")
       fi
-    done <<< "$metadata_keys"
+    done < <(yq e '.metadata | to_entries | .[] | [.key, .value] | @tsv' "$config")
   fi
 
   # Add request body
