@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import type * as Monaco from "monaco-editor";      // types only
-import { monaco } from "../lib/monaco";            // runtime API
+import * as monaco from "monaco-editor";
 import { configureMonacoYaml } from "monaco-yaml";
 
 // Simple guard so we only wire YAML services once
@@ -18,7 +17,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   // Ref to the DOM node Monaco will render into
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Ref to keep the editor instance (avoid double init, allow dispose)
-  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   // Track validation state
   const [hasErrors, setHasErrors] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -64,6 +63,27 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
 
     // If React re-runs the effect (StrictMode), do not re-create the editor
     if (editorRef.current) return;
+
+    // Configure workers once; Monaco uses this to spawn background workers
+    if (typeof window !== "undefined" && !(window as any).MonacoEnvironment) {
+      (window as any).MonacoEnvironment = {
+        getWorker(_id: string, label: string) {
+          if (label === "yaml") {
+            return new Worker(
+              new URL("monaco-yaml/yaml.worker", import.meta.url),
+              { type: "module" }
+            );
+          }
+          return new Worker(
+            new URL(
+              "monaco-editor/esm/vs/editor/editor.worker",
+              import.meta.url
+            ),
+            { type: "module" }
+          );
+        },
+      };
+    }
 
     // Create a YAML model; URI is just a fake file name
     const model = monaco.editor.createModel(
