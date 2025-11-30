@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       if (!isSafeUrl(url)) {
         const errorResponse = ExecuteErrorResponseSchema.parse({
           success: false,
-          error: "Security Violation: Access to local/private networks is blocked.",
+          error: "Security Violation: Access to local/private networks is blocked. (I'll maybe port yapi to Go, so it can run in the browser directly so you can do this!)",
           errorType: "SSRF_BLOCKED",
         });
         return NextResponse.json(errorResponse, { status: 403 });
