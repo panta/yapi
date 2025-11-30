@@ -82,8 +82,8 @@ export async function getOgImage() {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "12px",
-            padding: "16px 32px",
+            gap: "16px",
+            padding: "20px 40px",
             backgroundColor: COLORS.bgElevated,
             border: `1px solid ${COLORS.border}`,
             borderRadius: "9999px",
@@ -92,8 +92,8 @@ export async function getOgImage() {
         >
           <div
             style={{
-              width: "10px",
-              height: "10px",
+              width: "14px",
+              height: "14px",
               borderRadius: "50%",
               backgroundColor: COLORS.accent,
               display: "flex",
@@ -101,10 +101,10 @@ export async function getOgImage() {
           />
           <span
             style={{
-              fontSize: "24px",
+              fontSize: "36px",
               color: COLORS.fgMuted,
               textTransform: "uppercase",
-              letterSpacing: "2px",
+              letterSpacing: "3px",
             }}
           >
             Bash-powered YAML API workbench
@@ -115,18 +115,18 @@ export async function getOgImage() {
         <div
           style={{
             display: "flex",
-            gap: "20px",
+            gap: "24px",
           }}
         >
           {["HTTP", "gRPC", "TCP"].map((protocol) => (
             <div
               key={protocol}
               style={{
-                padding: "14px 32px",
+                padding: "18px 40px",
                 backgroundColor: COLORS.bgElevated,
                 border: `1px solid ${COLORS.border}`,
                 borderRadius: "12px",
-                fontSize: "24px",
+                fontSize: "36px",
                 color: COLORS.fgMuted,
                 display: "flex",
               }}
