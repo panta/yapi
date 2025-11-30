@@ -4,6 +4,7 @@ import { promisify } from "util";
 import { writeFile, unlink } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { parse } from "yaml";
 import {
   ExecuteRequestSchema,
   ExecuteSuccessResponseSchema,
@@ -11,6 +12,48 @@ import {
 } from "@/app/types/api-contract";
 
 const execAsync = promisify(exec);
+
+// SSRF Protection: Define blocked IP ranges
+const IS_IP_V4 = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+const PRIVATE_IP_RANGES = [
+  /^127\./,           // Localhost
+  /^10\./,            // Local LAN
+  /^192\.168\./,      // Local LAN
+  /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // Docker/Local LAN
+  /^169\.254\./,      // Cloud Metadata (AWS/GCP/Azure)
+  /^0\.0\.0\.0/       // All interfaces
+];
+
+// Helper to validate URL for SSRF protection
+function isSafeUrl(urlStr: string): boolean {
+  try {
+    const url = new URL(urlStr);
+
+    // Block non-http/grpc protocols (e.g., file://)
+    if (!['http:', 'https:', 'grpc:', 'grpcs:', 'tcp:'].includes(url.protocol)) {
+      return false;
+    }
+
+    const hostname = url.hostname;
+
+    // Block "localhost" explicitly
+    if (hostname === 'localhost') return false;
+
+    // Check against Private IP regex
+    if (IS_IP_V4.test(hostname)) {
+      if (PRIVATE_IP_RANGES.some(regex => regex.test(hostname))) {
+        return false;
+      }
+    }
+
+    // NOTE: This does NOT prevent DNS Rebinding (where attacker maps google.com -> 127.0.0.1)
+    // To fix that requires a custom DNS resolver, which is not a "quick fix".
+
+    return true;
+  } catch (e) {
+    return false; // Invalid URL
+  }
+}
 
 /**
  * POST /api/execute
@@ -43,6 +86,37 @@ export async function POST(request: NextRequest) {
         success: false,
         error: "YAML content is empty",
         errorType: "VALIDATION_ERROR",
+      });
+      return NextResponse.json(errorResponse, { status: 400 });
+    }
+
+    // SSRF Protection: Validate URL in YAML
+    try {
+      const parsed = parse(yaml);
+      const url = parsed.url;
+
+      if (!url) {
+        const errorResponse = ExecuteErrorResponseSchema.parse({
+          success: false,
+          error: "YAML must contain a 'url' field",
+          errorType: "VALIDATION_ERROR",
+        });
+        return NextResponse.json(errorResponse, { status: 400 });
+      }
+
+      if (!isSafeUrl(url)) {
+        const errorResponse = ExecuteErrorResponseSchema.parse({
+          success: false,
+          error: "Security Violation: Access to local/private networks is blocked.",
+          errorType: "SSRF_BLOCKED",
+        });
+        return NextResponse.json(errorResponse, { status: 403 });
+      }
+    } catch (e) {
+      const errorResponse = ExecuteErrorResponseSchema.parse({
+        success: false,
+        error: "Invalid YAML",
+        errorType: "YAML_PARSE_ERROR",
       });
       return NextResponse.json(errorResponse, { status: 400 });
     }
