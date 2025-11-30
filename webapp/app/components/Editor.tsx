@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import * as monaco from "monaco-editor";
+import type * as Monaco from "monaco-editor";      // types only
+import { monaco } from "../lib/monaco";            // runtime API
 import { configureMonacoYaml } from "monaco-yaml";
-import yaml from "yaml";
 
 // Simple guard so we only wire YAML services once
 let yamlConfigured = false;
@@ -18,7 +18,7 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   // Ref to the DOM node Monaco will render into
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Ref to keep the editor instance (avoid double init, allow dispose)
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   // Track validation state
   const [hasErrors, setHasErrors] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -65,30 +65,6 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     // If React re-runs the effect (StrictMode), do not re-create the editor
     if (editorRef.current) return;
 
-    // Configure workers once; Monaco uses this to spawn background workers
-    if (typeof window !== "undefined" && !(window as any).MonacoEnvironment) {
-      (window as any).MonacoEnvironment = {
-        getWorker(_id: string, label: string) {
-          // Use YAML worker for yaml language
-          if (label === "yaml") {
-            return new Worker(
-              new URL("monaco-yaml/yaml.worker", import.meta.url),
-              { type: "module" }
-            );
-          }
-
-          // Fallback to default Monaco editor worker for everything else
-          return new Worker(
-            new URL(
-              "monaco-editor/esm/vs/editor/editor.worker",
-              import.meta.url
-            ),
-            { type: "module" }
-          );
-        },
-      };
-    }
-
     // Create a YAML model; URI is just a fake file name
     const model = monaco.editor.createModel(
       value,
@@ -101,11 +77,20 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
       model,
       automaticLayout: true,
       minimap: { enabled: false },
-      theme: "vs",
+      theme: "vs-dark",
       fontSize: 14,
+      fontFamily: "var(--font-jetbrains-mono)",
       lineNumbers: "on",
       scrollBeyondLastLine: false,
       wordWrap: "on",
+      padding: { top: 16, bottom: 16 },
+      renderLineHighlight: "all",
+      cursorBlinking: "smooth",
+      // ensure IntelliSense is on
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
+      acceptSuggestionOnEnter: "on",
+      tabCompletion: "on",
     });
 
     // Configure YAML validation / completion once per app
@@ -238,36 +223,82 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   }, [onRun]);
 
   return (
-    <div className="h-full flex flex-col bg-yapi-editor">
+    <div className="h-full flex flex-col bg-yapi-bg relative">
       {/* Editor Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-yapi-border-dark bg-yellow-50">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xs font-semibold text-yapi-fg/60 uppercase tracking-wide">
-            Request Config
-          </h2>
+      <div className="relative flex items-center justify-between px-6 h-16 border-b border-yapi-border/50 bg-yapi-bg-elevated/50 backdrop-blur-sm">
+        {/* Subtle gradient accent */}
+        <div className="absolute inset-0 bg-gradient-to-r from-yapi-accent/5 via-transparent to-transparent opacity-50"></div>
+
+        <div className="relative flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-yapi-accent shadow-[0_0_8px_rgba(255,102,0,0.5)] animate-pulse"></div>
+            <h2 className="text-xs font-semibold text-yapi-fg tracking-wider">
+              REQUEST
+            </h2>
+          </div>
+
           {hasErrors && (
-            <div className="flex items-center gap-1.5 text-xs text-red-600">
-              <span className="font-bold">⚠</span>
-              <span>{errorMessage}</span>
+            <div className="group relative flex items-center gap-2 text-xs text-yapi-error bg-yapi-error/10 border border-yapi-error/20 px-3 py-1.5 rounded-lg backdrop-blur-sm animate-shake">
+              <span className="text-sm">⚠</span>
+              <span className="font-medium max-w-xs truncate">{errorMessage}</span>
+
+              {/* Tooltip on hover */}
+              <div className="absolute left-0 top-full mt-2 hidden group-hover:block z-50">
+                <div className="bg-yapi-bg-elevated border border-yapi-error/30 rounded-lg px-3 py-2 shadow-xl max-w-md">
+                  <p className="text-xs text-yapi-fg whitespace-pre-wrap">{errorMessage}</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
+
         <button
           onClick={handleRunClick}
           disabled={hasErrors}
-          className={`px-4 py-1.5 text-sm font-medium rounded transition-colors flex items-center gap-2 ${
+          className={`group relative px-5 py-2 text-sm font-semibold rounded-lg transition-all duration-300 flex items-center gap-2.5 overflow-hidden ${
             hasErrors
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-yapi-accent text-white hover:bg-yapi-accent-hover"
+              ? "bg-yapi-bg-subtle text-yapi-fg-subtle cursor-not-allowed opacity-50"
+              : "bg-gradient-to-r from-yapi-accent to-yapi-accent hover:from-yapi-accent hover:to-orange-500 text-white shadow-lg hover:shadow-xl hover:shadow-yapi-accent/30 hover:scale-105 active:scale-95"
           }`}
         >
-          <span>Run</span>
-          <kbd className="text-xs bg-white/20 px-1.5 py-0.5 rounded">⌘↵ or ⌘S</kbd>
+          {!hasErrors && (
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-lg animate-shimmer"></div>
+          )}
+          <span className="relative flex items-center gap-2">
+            <span>Run</span>
+            <kbd className="text-[10px] bg-black/30 px-1.5 py-0.5 rounded border border-white/10 font-mono">
+              ⌘↵
+            </kbd>
+          </span>
         </button>
       </div>
 
-      {/* Monaco Editor Container */}
-      <div ref={containerRef} className="flex-1" />
+      {/* Monaco Editor Container with subtle inner glow */}
+      <div className="relative flex-1 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-yapi-accent/5 via-transparent to-transparent pointer-events-none h-32"></div>
+        <div ref={containerRef} className="h-full" />
+      </div>
+
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-2px); }
+          75% { transform: translateX(2px); }
+        }
+
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+
+        .animate-shake {
+          animation: shake 0.3s ease-in-out;
+        }
+
+        .animate-shimmer {
+          animation: shimmer 2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
