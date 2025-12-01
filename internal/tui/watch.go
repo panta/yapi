@@ -47,6 +47,7 @@ type watchModel struct {
 	content     string
 	lastMod     time.Time
 	lastRun     time.Time
+	duration    time.Duration
 	err         error
 	width       int
 	height      int
@@ -58,8 +59,9 @@ type watchModel struct {
 type tickMsg time.Time
 type fileChangedMsg struct{}
 type runResultMsg struct {
-	content string
-	err     error
+	content  string
+	err      error
+	duration time.Duration
 }
 
 func tickCmd() tea.Cmd {
@@ -89,12 +91,12 @@ func runYapiCmd(path string) tea.Cmd {
 		}
 
 		opts := runner.Options{NoColor: false}
-		output, _, err := runner.RunAndFormat(cfg, opts)
+		output, result, err := runner.RunAndFormat(cfg, opts)
 		if err != nil {
 			return runResultMsg{err: err}
 		}
 
-		return runResultMsg{content: output}
+		return runResultMsg{content: output, duration: result.Duration}
 	}
 }
 
@@ -161,6 +163,7 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case runResultMsg:
 		m.lastRun = time.Now()
+		m.duration = msg.duration
 		if msg.err != nil {
 			m.err = msg.err
 			m.content = errorStyle.Render(msg.err.Error())
@@ -193,10 +196,11 @@ func (m watchModel) View() string {
 
 	// Header
 	filename := filepath.Base(m.filepath)
-	title := titleStyle.Render(" 🐑 yapi watch ")
+	title := titleStyle.Render(" yapi watch ")
 	fileInfo := infoStyle.Render(filename)
 	statusText := m.statusStyle.Render(fmt.Sprintf("[%s]", m.status))
 	timeText := infoStyle.Render(m.lastRun.Format("15:04:05"))
+	durationText := infoStyle.Render(fmt.Sprintf("(%s)", m.duration.Round(time.Millisecond)))
 
 	header := lipgloss.JoinHorizontal(
 		lipgloss.Center,
@@ -207,6 +211,8 @@ func (m watchModel) View() string {
 		statusText,
 		"  ",
 		timeText,
+		"  ",
+		durationText,
 	)
 
 	// Footer
