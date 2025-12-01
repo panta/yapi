@@ -1,158 +1,202 @@
-# yapi 🐏
+# 🐑 yapi
 
-Tired of `curl` novels and heavyweight API tools for one tiny request? **yapi** is a small, Bash-powered YAML API client that speaks HTTP, gRPC, and raw TCP.
+**The API client that lives in your terminal (and your git repo).**
 
-You write clean YAML, yapi does the ugly shell work.
+Stop clicking through heavy Electron apps just to send a JSON body. **yapi** is a CLI-first, offline-first, git-friendly API client for HTTP, gRPC, and TCP. It uses simple YAML files to define requests, meaning you can commit them, review them, and run them anywhere.
 
----
+[**Try the Playground**](https://www.google.com/search?q=https://yapi.run/playground) | [**View Source**](https://github.com/jamierpond/yapi)
 
-## Quick Taste
+-----
 
-Instead of this `curl` command:
+## ⚡ Install
+
+**Using Go:**
 
 ```bash
-curl -X POST 'https://httpbin.org/post' \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Testing yapi","description":"...","userId":123,"isPublished":true,"tags":["testing","api","yaml"]}'
+go install yapi.run/cli/cmd/yapi@latest
 ```
 
-You write this `yapi` config:
+**From Source:**
+
+```bash
+git clone https://github.com/jamierpond/yapi
+cd yapi
+make install
+```
+
+-----
+
+## 🚀 Quick Start
+
+1.  **Create a request file** (e.g., `get-user.yapi.yml`):
+
+    ```yaml
+    url: https://jsonplaceholder.typicode.com/users/1
+    method: GET
+    ```
+
+2.  **Run it:**
+
+    ```bash
+    yapi run get-user.yapi.yml
+    ```
+
+3.  **See the magic:** You get a beautifully highlighted, formatted response.
+
+-----
+
+## 📚 Examples
+
+**yapi** speaks many protocols. Here is how you define them.
+
+### 1\. HTTP with JSON Body
+
+No more escaping quotes in curl.
 
 ```yaml
-# examples/create-post.yapi.yml
-# yaml-language-server: $schema=https://yapit.dev/schema/v1
-
-url: https://httpbin.org
-path: /post
+url: https://api.example.com/posts
 method: POST
 content_type: application/json
 
+# yapi handles the JSON encoding for you
 body:
-  title: "Testing yapi - YAML API Testing Tool"
-  description: "This demo shows nested objects, arrays, and various data types"
-  userId: 123
-  isPublished: true
+  title: "Hello World"
   tags:
+    - cli
     - testing
-    - api
-    - yaml
+  author:
+    id: 123
+    active: true
 ```
 
-Then just run `yapi`:
+### 2\. Environment Variables & Chaining
 
-```bash
-yapi -c examples/create-post.yapi.yml
-```
-
----
-
-## Installation
-
-1.  **Clone the repo** somewhere permanent, like `~/.config/yapi`.
-    ```bash
-    git clone https://github.com/jpond/yapi.git ~/.config/yapi
-    ```
-
-2.  **Make scripts executable**.
-    ```bash
-    chmod +x ~/.config/yapi/yapi ~/.config/yapi/lib/*.sh
-    ```
-
-3.  **Add to your `$PATH`** in `~/.zshrc` or `~/.bashrc`.
-    ```sh
-    export PATH="$HOME/.config/yapi:$PATH"
-    ```
-
-4.  **Reload your shell** and you're good to go.
-    ```bash
-    source ~/.zshrc
-    yapi -h
-    ```
-
----
-
-## Features
-
-*   **Declarative YAML** configs for clean, version-controllable API requests.
-*   **Multi-Protocol**: Support for HTTP/REST, gRPC, and raw TCP.
-*   **`fzf` Integration**: Interactive file picker for `*.yapi.yml` files.
-*   **History**: All runs are logged to `~/.yapi_history` for easy re-use.
-*   **Editor Support**: JSON Schema for autocomplete and validation in your editor.
-*   **Lightweight**: Just a few shell scripts and common command-line tools.
-
----
-
-## Usage
-
-```bash
-# Interactive selection (fzf over git tracked *.yapi.yml)
-yapi
-
-# Explicit config file
-yapi -c examples/google.yapi.yml
-
-# Override base URL at runtime
-yapi -c examples/google.yapi.yml -u "https://httpbin.org/get"
-
-# Search all YAML files, not just git tracked
-yapi --all
-```
-
----
-
-## Supported Protocols
-
-### HTTP / REST
-
-Supports standard verbs, query params, and JSON bodies.
+Use shell environment variables directly. Perfect for CI/CD or keeping secrets out of git.
 
 ```yaml
-url: https://httpbin.org
-path: /post
-method: POST
-query: { search: "yapi" }
-body:
-  name: "yapi demo"
-  isPublished: true
+url: https://api.example.com/secure-data
+method: GET
+
+headers:
+  Authorization: Bearer ${API_TOKEN}
+  X-Request-ID: ${REQUEST_ID:-default_id}
 ```
 
-### gRPC (via `grpcurl`)
+### 3\. JQ Filtering (Built-in\!)
 
-Uses server reflection by default. Can also use local `.proto` files.
+Don't grep output. Filter it right in the config.
 
 ```yaml
-url: grpc://grpcb.in:9000
-method: grpc
-service: hello.HelloService
+url: https://jsonplaceholder.typicode.com/users
+method: GET
+
+# Only show me names and emails, sorted by name
+jq_filter: "[.[] | {name, email}] | sort_by(.name)"
+```
+
+### 4\. gRPC (Reflection Support)
+
+Stop hunting for `.proto` files. If your server supports reflection, **yapi** just works.
+
+```yaml
+url: grpc://localhost:50051
+service: helloworld.Greeter
 rpc: SayHello
+
 body:
-  greeting: "yapi"
+  name: "yapi User"
 ```
 
-### TCP (via `nc`)
+### 5\. GraphQL
 
-Sends raw data over TCP. Supports text, hex, and base64 encoding.
+First-class support for queries and variables.
 
 ```yaml
-url: tcp://tcpbin.com:4242
-method: tcp
-data: "Hello from yapi!\n"
-encoding: text
+url: https://countries.trevorblades.com/graphql
+
+graphql: |
+  query getCountry($code: ID!) {
+    country(code: $code) {
+      name
+      capital
+    }
+  }
+
+variables:
+  code: "BR"
 ```
 
----
+-----
 
-## Dependencies
+## 🎛️ Interactive Mode (TUI)
 
--   **Core**: `bash`, `curl`, `jq`, `yq` (mikefarah), `git`
--   **Optional**: `fzf` (for picker), `grpcurl` (for gRPC), `nc` (for TCP)
+Don't remember the file name? Just run `yapi` without arguments.
 
----
+```bash
+yapi
+```
 
-## Development
+This launches the **Interactive TUI**. You can fuzzy-search through all your `.yapi.yml` files in the current directory (and subdirectories) and execute them instantly.
 
--   **Tests**: Written in `bats`. Run with `bats test/*.bats`.
--   **Schema**: If you change `yapi` behavior, keep `yapi.schema.json` in sync.
--   **Dependencies**: If you add a new dependency, add it to the `.depends` file.
+### 👀 Watch Mode
 
-Contributions are welcome!
+Tired of `Alt-Tab` -\> `Up Arrow` -\> `Enter`? Use watch mode to re-run the request every time you save the file.
+
+```bash
+yapi watch ./my-request.yapi.yml
+```
+
+-----
+
+## 🧠 Editor Integration
+
+### Neovim
+
+**yapi** was built with Neovim in mind. We have a native plugin in `lua/yapi_nvim`.
+
+**Lazy.nvim setup:**
+
+```lua
+{
+  dir = "~/path/to/yapi/lua/yapi_nvim", -- or point to your installed path
+  config = function()
+    require("yapi_nvim").setup({
+      lsp = true,    -- Enables the yapi Language Server
+      pretty = true, -- Uses the TUI renderer in the popup
+    })
+  end
+}
+```
+
+  * `:YapiRun` - Run the current buffer.
+  * `:YapiWatch` - Open a split and watch the current buffer.
+  * **LSP Support:** You get autocompletion for keys (`method`, `headers`, etc.) and validation right in your editor\!
+
+### VS Code / Others
+
+Since **yapi** includes a Language Server (`yapi lsp`), you can hook it up to any editor that supports LSP over stdio.
+
+-----
+
+## 📂 Project Structure
+
+  * `cmd/yapi`: The main CLI entry point.
+  * `internal/executor`: The brains. HTTP, gRPC, TCP, and GraphQL logic.
+  * `internal/tui`: The BubbleTea-powered interactive UI.
+  * `examples/`: **Look here for a ton of practical YAML examples\!**
+  * `webapp/`: The Next.js code for [yapi.run](https://yapi.run).
+
+-----
+
+## 🤝 Contributing
+
+Found a bug? Want to add WebSocket support? PRs are welcome\!
+
+1.  Fork it.
+2.  `make build` to ensure it compiles.
+3.  `make test` to run the suite.
+4.  Ship it.
+
+-----
+
+*Made with ☕ and Go.*
