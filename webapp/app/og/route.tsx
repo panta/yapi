@@ -118,7 +118,7 @@ export async function getOgImage() {
             gap: "24px",
           }}
         >
-          {["HTTP", "gRPC", "TCP"].map((protocol) => (
+          {["HTTP", "gRPC", "GraphQL", "TCP"].map((protocol) => (
             <div
               key={protocol}
               style={{
