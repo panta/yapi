@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"yapi.run/internal/config"
+	"yapi.run/cli/internal/config"
 )
 
 // TCPExecutor handles TCP requests.

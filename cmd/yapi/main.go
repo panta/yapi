@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"yapi.run/internal/config"
-	"yapi.run/internal/langserver"
-	"yapi.run/internal/runner"
-	"yapi.run/internal/tui"
+	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/langserver"
+	"yapi.run/cli/internal/runner"
+	"yapi.run/cli/internal/tui"
 )
 
 var (

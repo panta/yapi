@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
-	"yapi.run/internal/envsubst"
+	"yapi.run/cli/internal/envsubst"
 )
 
 type YapiConfig struct {

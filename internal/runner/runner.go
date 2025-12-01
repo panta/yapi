@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"yapi.run/internal/config"
-	"yapi.run/internal/executor"
-	"yapi.run/internal/filter"
-	"yapi.run/internal/output"
-	"yapi.run/internal/validation"
+	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/executor"
+	"yapi.run/cli/internal/filter"
+	"yapi.run/cli/internal/output"
+	"yapi.run/cli/internal/validation"
 )
 
 // Result holds the output of a yapi execution

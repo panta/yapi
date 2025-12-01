@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"yapi.run/internal/config"
+	"yapi.run/cli/internal/config"
 )
 
 // graphqlPayload represents the standard GraphQL JSON envelope

@@ -3,9 +3,9 @@ package langserver
 import (
 	"fmt"
 	"strings"
-	"yapi.run/internal/config"
-	"yapi.run/internal/envsubst"
-	"yapi.run/internal/validation"
+	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/envsubst"
+	"yapi.run/cli/internal/validation"
 
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"

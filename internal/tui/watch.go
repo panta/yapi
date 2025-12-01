@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"yapi.run/internal/config"
-	"yapi.run/internal/runner"
+	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/runner"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
