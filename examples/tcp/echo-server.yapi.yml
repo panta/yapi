@@ -1,0 +1,8 @@
+# TCP echo server test
+url: tcp://tcpbin.com:4242
+
+data: "Hello from yapi!\n"
+encoding: text
+read_timeout: 5
+idle_timeout: 500
+close_after_send: true
