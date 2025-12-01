@@ -4,4 +4,10 @@
 - add real lsp to playground (maybe over http, maybe wasm, local)
 - vscode extension
 - jetbrains extension
+- add yapi version to top of all yapi file:
+```yapi
+yapi: v1
+url: foobar.com
+method: GET
+```
 
