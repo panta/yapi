@@ -28,7 +28,7 @@ export default function Landing() {
             <span className="text-xl font-bold tracking-tight font-mono">yapi</span>
           </div>
           <div className="flex gap-6 items-center">
-            <a href="https://github.com/jpond/yapi" className="text-sm font-medium text-yapi-fg-muted hover:text-yapi-fg transition-colors">
+            <a href="https://github.com/jamierpond/yapi" className="text-sm font-medium text-yapi-fg-muted hover:text-yapi-fg transition-colors">
               GitHub
             </a>
             <Link
@@ -67,23 +67,23 @@ export default function Landing() {
           </h1>
 
           <p className="text-xl text-yapi-fg-muted max-w-2xl mx-auto leading-relaxed">
-            Stop letting cloud outages block your dev loop. <br/>
-            <strong>yapi</strong> is the Go-powered, git-backed API client that works when the internet doesn't.
+            Your dev loop, unchained. <br/>
+            <strong>yapi</strong> is the Go-powered, git-backed API client that makes you wonder how you ever shipped code without it.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
+          <div className="flex flex-col items-center gap-4 pt-8">
             <button
               onClick={copyInstall}
-              className="group relative px-8 py-4 bg-yapi-bg-elevated hover:bg-yapi-bg-subtle border border-yapi-border hover:border-yapi-border-strong rounded-xl transition-all w-full sm:w-auto min-w-[300px] text-left flex items-center justify-between font-mono text-sm"
+              className="group relative px-6 py-4 bg-yapi-bg-elevated hover:bg-yapi-bg-subtle border border-yapi-border hover:border-yapi-border-strong rounded-xl transition-all text-left flex items-center gap-4 font-mono text-sm"
             >
-              <span className="text-yapi-fg-muted">$ <span className="text-yapi-fg">go install yapi...</span></span>
-              <span className="text-yapi-fg-subtle group-hover:text-yapi-accent transition-colors">
+              <span className="text-yapi-fg-muted">$ <span className="text-yapi-fg">go install yapi.run/cli/cmd/yapi@latest</span></span>
+              <span className="text-yapi-fg-subtle group-hover:text-yapi-accent transition-colors whitespace-nowrap">
                 {copied ? "✓ Copied" : "Copy"}
               </span>
             </button>
             <Link
               href="/playground"
-              className="px-8 py-4 rounded-xl bg-yapi-accent hover:bg-yapi-accent-hover text-white font-bold transition-all shadow-lg hover:shadow-yapi-accent/40 w-full sm:w-auto"
+              className="px-8 py-4 rounded-xl bg-yapi-accent hover:bg-yapi-accent-hover text-white font-bold transition-all shadow-lg hover:shadow-yapi-accent/40"
             >
               Try in Browser
             </Link>
@@ -118,23 +118,23 @@ export default function Landing() {
             <div className="h-px w-full bg-yapi-border/50 md:hidden"></div>
 
             <div className="space-y-4">
-              <h3 className="text-2xl font-bold text-yapi-fg">The yapi Way</h3>
+              <h3 className="text-2xl font-bold text-yapi-fg">Superpowers Unlocked</h3>
               <ul className="space-y-3 text-yapi-fg-muted">
                 <li className="flex items-center gap-3">
                   <span className="text-yapi-success">✓</span>
-                  <span>Just a YAML file. Commit it to Git.</span>
+                  <span>Version control your API calls. Review them in PRs.</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <span className="text-yapi-success">✓</span>
-                  <span>Zero runtime dependencies. It's just Go.</span>
+                  <span>Instant startup. One binary. Zero bloat.</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <span className="text-yapi-success">✓</span>
-                  <span>Interactive TUI + LSP for your editor</span>
+                  <span>Stay in flow with TUI + LSP in your editor</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <span className="text-yapi-success">✓</span>
-                  <span>Localhost stays local. Forever.</span>
+                  <span>Works on a plane, in a tunnel, anywhere.</span>
                 </li>
               </ul>
             </div>
@@ -168,7 +168,7 @@ export default function Landing() {
             </pre>
 
             {/* "Offline" Badge */}
-            <div className="absolute top-4 right-4 px-2 py-1 bg-yapi-success/10 border border-yapi-success/30 rounded text-[10px] text-yapi-success font-bold uppercase tracking-wider">
+            <div className="absolute bottom-4 right-4 px-2 py-1 bg-yapi-success/10 border border-yapi-success/30 rounded text-[10px] text-yapi-success font-bold uppercase tracking-wider">
               100% Offline
             </div>
           </div>
@@ -179,17 +179,17 @@ export default function Landing() {
           <FeatureCard
             icon="⚡"
             title="Go Native"
-            desc="Rewritten in Go. A single binary that starts instantly. No JVM, no Electron, no lag."
+            desc="One binary. Starts in milliseconds. Uses almost no memory. This is how tools should feel."
           />
           <FeatureCard
             icon="📺"
             title="TUI & Watch Mode"
-            desc="Keep your hands on the keyboard. Live-reload requests as you edit your YAML configs."
+            desc="Edit your YAML, see results instantly. Never leave your terminal. Never break your flow."
           />
           <FeatureCard
             icon="🧠"
             title="LSP Integration"
-            desc="We don't force an editor on you. We provide a Language Server so you can use yours."
+            desc="Autocomplete, validation, and jump-to-definition in VS Code, Neovim, or whatever you use."
           />
         </div>
 
@@ -202,7 +202,7 @@ export default function Landing() {
             rm -rf postman && go install yapi
           </div>
           <div className="flex gap-6">
-            <a href="https://github.com/jpond/yapi" className="text-yapi-fg-subtle hover:text-yapi-accent transition-colors text-sm">Source Code</a>
+            <a href="https://github.com/jamierpond/yapi" className="text-yapi-fg-subtle hover:text-yapi-accent transition-colors text-sm">Source Code</a>
           </div>
         </div>
       </footer>
