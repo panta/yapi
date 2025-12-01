@@ -11,8 +11,10 @@ import (
 	"cli/internal/config"
 	"cli/internal/executor"
 	"cli/internal/filter"
+	"cli/internal/langserver"
 	"cli/internal/output"
 	"cli/internal/tui"
+	"cli/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +35,9 @@ func main() {
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable color output")
 
 	rootCmd.AddCommand(newRunCmd())
+	rootCmd.AddCommand(newWatchCmd())
 	rootCmd.AddCommand(newHistoryCmd())
+	rootCmd.AddCommand(newLSPCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -46,33 +50,7 @@ func runInteractive(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatalf("Failed to select config file: %v", err)
 	}
-
-	cfg, err := config.LoadConfig(selectedPath)
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
-	if urlOverride != "" {
-		cfg.URL = urlOverride
-	}
-
-	logHistory(selectedPath, urlOverride)
-
-	result, contentType, err := executeConfig(cfg)
-	if err != nil {
-		log.Fatalf("Request failed: %v", err)
-	}
-
-	if cfg.JQFilter != "" {
-		result, err = filter.ApplyJQ(result, cfg.JQFilter)
-		if err != nil {
-			log.Fatalf("JQ filter failed: %v", err)
-		}
-		// jq output is always JSON
-		contentType = "application/json"
-	}
-
-	fmt.Println(output.Highlight(result, contentType, noColor))
+	runConfigPath(selectedPath)
 }
 
 func newRunCmd() *cobra.Command {
@@ -81,37 +59,206 @@ func newRunCmd() *cobra.Command {
 		Short: "Run a request defined in a yapi config file",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			configPath = args[0]
-
-			cfg, err := config.LoadConfig(configPath)
-			if err != nil {
-				log.Fatalf("Failed to load config: %v", err)
-			}
-
-			if urlOverride != "" {
-				cfg.URL = urlOverride
-			}
-
-			logHistory(configPath, urlOverride)
-
-			result, contentType, err := executeConfig(cfg)
-			if err != nil {
-				log.Fatalf("Request failed: %v", err)
-			}
-
-			if cfg.JQFilter != "" {
-				result, err = filter.ApplyJQ(result, cfg.JQFilter)
-				if err != nil {
-					log.Fatalf("JQ filter failed: %v", err)
-				}
-				// jq output is always JSON
-				contentType = "application/json"
-			}
-
-			fmt.Println(output.Highlight(result, contentType, noColor))
+			runConfigPath(args[0])
 		},
 	}
 	return cmd
+}
+
+func newWatchCmd() *cobra.Command {
+	var pretty bool
+	var noPretty bool
+
+	cmd := &cobra.Command{
+		Use:   "watch [file]",
+		Short: "Watch a yapi config file and re-run on changes",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			var path string
+			interactive := len(args) == 0
+
+			if interactive {
+				selectedPath, err := tui.FindConfigFileSingle()
+				if err != nil {
+					log.Fatalf("Failed to select config file: %v", err)
+				}
+				path = selectedPath
+			} else {
+				path = args[0]
+			}
+
+			// --pretty forces pretty mode, --no-pretty disables it
+			// Default: pretty in interactive mode, simple when file is passed
+			usePretty := pretty || (interactive && !noPretty)
+
+			if usePretty {
+				if err := tui.RunWatch(path); err != nil {
+					log.Fatalf("Watch failed: %v", err)
+				}
+			} else {
+				watchConfigPath(path)
+			}
+		},
+	}
+
+	cmd.Flags().BoolVarP(&pretty, "pretty", "p", false, "Enable pretty TUI mode")
+	cmd.Flags().BoolVar(&noPretty, "no-pretty", false, "Disable pretty TUI mode")
+
+	return cmd
+}
+
+func watchConfigPath(path string) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		log.Fatalf("Failed to resolve path: %v", err)
+	}
+
+	// Initial run
+	clearScreen()
+	printWatchHeader(absPath)
+	runConfigPathSafe(absPath)
+
+	// Get initial mod time
+	lastMod := getModTime(absPath)
+
+	// Poll for changes
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		currentMod := getModTime(absPath)
+		if currentMod != lastMod {
+			lastMod = currentMod
+			clearScreen()
+			printWatchHeader(absPath)
+			runConfigPathSafe(absPath)
+		}
+	}
+}
+
+func getModTime(path string) time.Time {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
+}
+
+func clearScreen() {
+	fmt.Print("\033[H\033[2J")
+}
+
+func printWatchHeader(path string) {
+	fmt.Printf("\033[2m[watching %s]\033[0m\n", filepath.Base(path))
+	fmt.Printf("\033[2m[%s]\033[0m\n\n", time.Now().Format("15:04:05"))
+}
+
+func runConfigPathSafe(path string) {
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		fmt.Printf("\033[31mError loading config: %v\033[0m\n", err)
+		return
+	}
+
+	issues := validation.ValidateConfig(cfg)
+	hasErrors := false
+	for _, issue := range issues {
+		lvl := "WARN"
+		color := "\033[33m" // yellow
+		if issue.Severity == validation.SeverityError {
+			lvl = "ERROR"
+			color = "\033[31m" // red
+			hasErrors = true
+		}
+		if issue.Field != "" {
+			fmt.Printf("%s[%s] %s: %s\033[0m\n", color, lvl, issue.Field, issue.Message)
+		} else {
+			fmt.Printf("%s[%s] %s\033[0m\n", color, lvl, issue.Message)
+		}
+	}
+	if hasErrors {
+		fmt.Println("\033[31mConfig validation failed\033[0m")
+		return
+	}
+
+	if urlOverride != "" {
+		cfg.URL = urlOverride
+	}
+
+	body, ctype, err := executeConfig(cfg)
+	if err != nil {
+		fmt.Printf("\033[31mRequest failed: %v\033[0m\n", err)
+		return
+	}
+
+	if cfg.JQFilter != "" {
+		body, err = filter.ApplyJQ(body, cfg.JQFilter)
+		if err != nil {
+			fmt.Printf("\033[31mJQ filter failed: %v\033[0m\n", err)
+			return
+		}
+		ctype = "application/json"
+	}
+
+	fmt.Println(output.Highlight(body, ctype, noColor))
+}
+
+func newLSPCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "lsp",
+		Short: "Run the yapi language server over stdio",
+		Run: func(cmd *cobra.Command, args []string) {
+			langserver.Run()
+		},
+	}
+}
+
+func runConfigPath(path string) {
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	issues := validation.ValidateConfig(cfg)
+	hasErrors := false
+	for _, issue := range issues {
+		lvl := "WARN"
+		if issue.Severity == validation.SeverityError {
+			lvl = "ERROR"
+		}
+		if issue.Field != "" {
+			log.Printf("[%s] %s: %s", lvl, issue.Field, issue.Message)
+		} else {
+			log.Printf("[%s] %s", lvl, issue.Message)
+		}
+		if issue.Severity == validation.SeverityError {
+			hasErrors = true
+		}
+	}
+	if hasErrors {
+		log.Fatal("Config validation failed")
+	}
+
+	if urlOverride != "" {
+		cfg.URL = urlOverride
+	}
+
+	logHistory(path, urlOverride)
+
+	body, ctype, err := executeConfig(cfg)
+	if err != nil {
+		log.Fatalf("Request failed: %v", err)
+	}
+
+	if cfg.JQFilter != "" {
+		body, err = filter.ApplyJQ(body, cfg.JQFilter)
+		if err != nil {
+			log.Fatalf("JQ filter failed: %v", err)
+		}
+		ctype = "application/json"
+	}
+
+	fmt.Println(output.Highlight(body, ctype, noColor))
 }
 
 func newHistoryCmd() *cobra.Command {
