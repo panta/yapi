@@ -1,4 +1,4 @@
-module yapi.run
+module yapi.run/cli
 
 go 1.25.1
 
