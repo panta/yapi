@@ -9,6 +9,7 @@ import (
 
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
+	"github.com/itchyny/gojq"
 	"github.com/tliron/commonlog"
 	_ "github.com/tliron/commonlog/simple"
 	"github.com/tliron/glsp"
@@ -176,6 +177,12 @@ func validateAndNotify(ctx *glsp.Context, uri protocol.DocumentUri, text string)
 			diagnostics = append(diagnostics, gqlDiags...)
 		}
 
+		// JQ syntax validation
+		if cfg.JQFilter != "" {
+			jqDiags := validateJQSyntax(text, cfg.JQFilter)
+			diagnostics = append(diagnostics, jqDiags...)
+		}
+
 		// Environment variable validation
 		envDiags := validateEnvVars(text)
 		diagnostics = append(diagnostics, envDiags...)
@@ -227,6 +234,28 @@ func validateGraphQLSyntax(fullYamlText string, gqlQuery string) []protocol.Diag
 			Severity: ptr(protocol.DiagnosticSeverityError),
 			Source:   ptr("yapi"),
 			Message:  "GraphQL syntax error: " + err.Error(),
+		},
+	}
+}
+
+func validateJQSyntax(fullYamlText string, jqFilter string) []protocol.Diagnostic {
+	_, err := gojq.Parse(jqFilter)
+	if err == nil {
+		return nil
+	}
+
+	// Find where the "jq_filter:" field is in the YAML file
+	targetLine := findFieldLine(fullYamlText, "jq_filter")
+
+	return []protocol.Diagnostic{
+		{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: targetLine, Character: 0},
+				End:   protocol.Position{Line: targetLine, Character: 100},
+			},
+			Severity: ptr(protocol.DiagnosticSeverityError),
+			Source:   ptr("yapi"),
+			Message:  "JQ syntax error: " + err.Error(),
 		},
 	}
 }

@@ -2,4 +2,5 @@
 url: https://jsonplaceholder.typicode.com/users
 
 # Get users with their company names, sorted by name
-jq_filter: "[.[] | {name, company: .company.name}] | sort_by(.name)"
+jq_filter: |
+  [.[] | {name, company: .company.name}] | sort_by(.name)
