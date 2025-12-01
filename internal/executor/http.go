@@ -16,6 +16,7 @@ type HTTPResponse struct {
 	Body        string
 	ContentType string
 	StatusCode  int
+	RequestURL  string // The full constructed URL with query params
 }
 
 // HTTPExecutor handles HTTP requests.
@@ -100,5 +101,6 @@ func (e *HTTPExecutor) Execute(cfg *config.YapiConfig) (*HTTPResponse, error) {
 		Body:        string(body),
 		ContentType: res.Header.Get("Content-Type"),
 		StatusCode:  res.StatusCode,
+		RequestURL:  baseURL.String(),
 	}, nil
 }

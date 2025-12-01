@@ -89,7 +89,7 @@ func runYapiCmd(path string) tea.Cmd {
 		}
 
 		opts := runner.Options{NoColor: false}
-		output, err := runner.RunAndFormat(cfg, opts)
+		output, _, err := runner.RunAndFormat(cfg, opts)
 		if err != nil {
 			return runResultMsg{err: err}
 		}

@@ -3,6 +3,7 @@ package runner
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"yapi.run/cli/internal/config"
 	"yapi.run/cli/internal/executor"
@@ -16,6 +17,8 @@ type Result struct {
 	Body        string
 	ContentType string
 	Warnings    []string
+	RequestURL  string        // The full constructed URL (HTTP/GraphQL only)
+	Duration    time.Duration // Time taken for the request
 }
 
 // Options for execution
@@ -55,7 +58,7 @@ func Run(cfg *config.YapiConfig, opts Options) (*Result, error) {
 	cfg.SubstituteEnvVars()
 
 	// Execute based on transport
-	body, ctype, err := execute(cfg)
+	body, ctype, requestURL, duration, err := execute(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -73,53 +76,60 @@ func Run(cfg *config.YapiConfig, opts Options) (*Result, error) {
 		Body:        body,
 		ContentType: ctype,
 		Warnings:    warnings,
+		RequestURL:  requestURL,
+		Duration:    duration,
 	}, nil
 }
 
-// RunAndFormat executes and returns highlighted output
-func RunAndFormat(cfg *config.YapiConfig, opts Options) (string, error) {
+// RunAndFormat executes and returns highlighted output plus Result metadata
+func RunAndFormat(cfg *config.YapiConfig, opts Options) (string, *Result, error) {
 	result, err := Run(cfg, opts)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	output := output.Highlight(result.Body, result.ContentType, opts.NoColor)
+	out := output.Highlight(result.Body, result.ContentType, opts.NoColor)
 	if len(result.Warnings) > 0 {
-		output = strings.Join(result.Warnings, "\n") + "\n\n" + output
+		out = strings.Join(result.Warnings, "\n") + "\n\n" + out
 	}
 
-	return output, nil
+	return out, result, nil
 }
 
 // execute dispatches to the appropriate executor based on config
-func execute(cfg *config.YapiConfig) (string, string, error) {
+func execute(cfg *config.YapiConfig) (body, ctype, requestURL string, duration time.Duration, err error) {
 	transport := detectTransport(cfg)
+
+	start := time.Now()
 
 	switch transport {
 	case "graphql":
-		resp, err := executor.NewGraphQLExecutor().Execute(cfg)
-		if err != nil {
-			return "", "", err
+		var resp *executor.HTTPResponse
+		resp, err = executor.NewGraphQLExecutor().Execute(cfg)
+		if err == nil {
+			body, ctype, requestURL = resp.Body, resp.ContentType, resp.RequestURL
 		}
-		return resp.Body, resp.ContentType, nil
 	case "grpc":
-		body, err := executor.NewGRPCExecutor().Execute(cfg)
-		return body, "application/json", err
+		body, err = executor.NewGRPCExecutor().Execute(cfg)
+		ctype = "application/json"
 	case "tcp":
-		body, err := executor.NewTCPExecutor().Execute(cfg)
-		return body, "text/plain", err
+		body, err = executor.NewTCPExecutor().Execute(cfg)
+		ctype = "text/plain"
 	case "http":
 		if cfg.Method == "" {
 			cfg.Method = "GET"
 		}
-		resp, err := executor.NewHTTPExecutor().Execute(cfg)
-		if err != nil {
-			return "", "", err
+		var resp *executor.HTTPResponse
+		resp, err = executor.NewHTTPExecutor().Execute(cfg)
+		if err == nil {
+			body, ctype, requestURL = resp.Body, resp.ContentType, resp.RequestURL
 		}
-		return resp.Body, resp.ContentType, nil
 	default:
-		return "", "", fmt.Errorf("unsupported transport: %s", transport)
+		err = fmt.Errorf("unsupported transport: %s", transport)
 	}
+
+	duration = time.Since(start)
+	return
 }
 
 // detectTransport determines the transport type from URL scheme or config fields

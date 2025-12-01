@@ -162,13 +162,14 @@ func runConfigPathSafe(path string) {
 		NoColor:     noColor,
 	}
 
-	output, err := runner.RunAndFormat(cfg, opts)
+	output, result, err := runner.RunAndFormat(cfg, opts)
 	if err != nil {
 		fmt.Printf("\033[31m%v\033[0m\n", err)
 		return
 	}
 
 	fmt.Println(output)
+	printResultMeta(result)
 }
 
 func newLSPCmd() *cobra.Command {
@@ -194,12 +195,21 @@ func runConfigPath(path string) {
 		NoColor:     noColor,
 	}
 
-	output, err := runner.RunAndFormat(cfg, opts)
+	output, result, err := runner.RunAndFormat(cfg, opts)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
 	fmt.Println(output)
+	printResultMeta(result)
+}
+
+// printResultMeta prints request URL and timing to stderr
+func printResultMeta(result *runner.Result) {
+	if result.RequestURL != "" {
+		fmt.Fprintf(os.Stderr, "\nURL: %s\n", result.RequestURL)
+	}
+	fmt.Fprintf(os.Stderr, "Time: %s\n", result.Duration)
 }
 
 func newHistoryCmd() *cobra.Command {
