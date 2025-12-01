@@ -37,7 +37,8 @@ func (e *GRPCExecutor) Execute(cfg *config.YapiConfig) (string, error) {
 	target := strings.TrimPrefix(cfg.URL, "grpc://")
 
 	var opts []grpc.DialOption
-	if cfg.Insecure || cfg.Plaintext {
+	// Default to insecure credentials for local development or when explicitly requested
+	if cfg.Insecure || cfg.Plaintext || strings.HasPrefix(target, "localhost") || strings.HasPrefix(target, "127.0.0.1") {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
