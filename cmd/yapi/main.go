@@ -204,12 +204,17 @@ func runConfigPath(path string) {
 	printResultMeta(result)
 }
 
+// dim wraps text in ANSI dim escape codes
+func dim(s string) string {
+	return "\033[2m" + s + "\033[0m"
+}
+
 // printResultMeta prints request URL and timing to stderr
 func printResultMeta(result *runner.Result) {
 	if result.RequestURL != "" {
-		fmt.Fprintf(os.Stderr, "\nURL: %s\n", result.RequestURL)
+		fmt.Fprintf(os.Stderr, "\n%s\n", dim("URL: "+result.RequestURL))
 	}
-	fmt.Fprintf(os.Stderr, "Time: %s\n", result.Duration)
+	fmt.Fprintf(os.Stderr, "%s\n", dim("Time: "+result.Duration.String()))
 }
 
 func newHistoryCmd() *cobra.Command {
