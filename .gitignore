@@ -1,1 +1,6 @@
 webapp/.depends
+cli/cmd/yapi/yapi
+cli/fzf-refernce-dont-use
+
+
+cli/yapi-test
