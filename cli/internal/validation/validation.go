@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"cli/internal/config"
+	"yapi.run/cli/internal/config"
 )
 
 // URL scheme constants

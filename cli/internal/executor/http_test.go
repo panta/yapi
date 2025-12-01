@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"cli/internal/config"
-	"cli/internal/executor"
+	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/executor"
 )
 
 func TestHTTPExecutor_URLBuilding(t *testing.T) {

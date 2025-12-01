@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"cli/internal/config"
-	"cli/internal/executor"
+	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/executor"
 )
 
 func TestTCPExecutor_Execute_Echo(t *testing.T) {
