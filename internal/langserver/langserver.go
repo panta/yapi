@@ -1,21 +1,15 @@
 package langserver
 
 import (
-	"fmt"
 	"strings"
-	"yapi.run/cli/internal/config"
-	"yapi.run/cli/internal/envsubst"
-	"yapi.run/cli/internal/validation"
 
-	"github.com/graphql-go/graphql/language/parser"
-	"github.com/graphql-go/graphql/language/source"
-	"github.com/itchyny/gojq"
 	"github.com/tliron/commonlog"
 	_ "github.com/tliron/commonlog/simple"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/tliron/glsp/server"
-	"gopkg.in/yaml.v3"
+	"yapi.run/cli/internal/utils"
+	"yapi.run/cli/internal/validation"
 )
 
 const lsName = "yapi language server"
@@ -142,153 +136,66 @@ func textDocumentDidSave(ctx *glsp.Context, params *protocol.DidSaveTextDocument
 }
 
 func validateAndNotify(ctx *glsp.Context, uri protocol.DocumentUri, text string) {
+	analysis, err := validation.AnalyzeConfigString(text)
+	if err != nil {
+		// Catastrophic error - send one diagnostic and bail
+		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+			URI: uri,
+			Diagnostics: []protocol.Diagnostic{{
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 0, Character: 0},
+					End:   protocol.Position{Line: 0, Character: 1},
+				},
+				Severity: ptr(protocol.DiagnosticSeverityError),
+				Source:   ptr("yapi"),
+				Message:  "internal validation error: " + err.Error(),
+			}},
+		})
+		return
+	}
+
+	// Initialize to empty slice, not nil, so JSON serializes as [] not null
 	diagnostics := []protocol.Diagnostic{}
 
-	var cfg config.YapiConfig
-	if err := yaml.Unmarshal([]byte(text), &cfg); err != nil {
-		// YAML parse error - show at line 0
+	// Config-level warnings (missing yapi: v1 etc)
+	for _, w := range analysis.Warnings {
 		diagnostics = append(diagnostics, protocol.Diagnostic{
 			Range: protocol.Range{
 				Start: protocol.Position{Line: 0, Character: 0},
-				End:   protocol.Position{Line: 0, Character: 1},
+				End:   protocol.Position{Line: 0, Character: 100},
 			},
-			Severity: ptr(protocol.DiagnosticSeverityError),
+			Severity: ptr(protocol.DiagnosticSeverityWarning),
 			Source:   ptr("yapi"),
-			Message:  "invalid YAML: " + err.Error(),
+			Message:  w,
 		})
-	} else {
-		issues := validation.ValidateConfig(&cfg)
-		for _, issue := range issues {
-			line := findFieldLine(text, issue.Field)
-			diagnostics = append(diagnostics, protocol.Diagnostic{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: line, Character: 0},
-					End:   protocol.Position{Line: line, Character: 100},
-				},
-				Severity: ptr(severityToProtocol(issue.Severity)),
-				Source:   ptr("yapi"),
-				Message:  issue.Message,
-			})
+	}
+
+	// Analyzer diagnostics
+	for _, d := range analysis.Diagnostics {
+		line := protocol.UInteger(0)
+		char := protocol.UInteger(0)
+		if d.Line >= 0 {
+			line = protocol.UInteger(d.Line)
+		}
+		if d.Col >= 0 {
+			char = protocol.UInteger(d.Col)
 		}
 
-		// GraphQL syntax validation
-		if cfg.Graphql != "" {
-			gqlDiags := validateGraphQLSyntax(text, cfg.Graphql)
-			diagnostics = append(diagnostics, gqlDiags...)
-		}
-
-		// JQ syntax validation
-		if cfg.JQFilter != "" {
-			jqDiags := validateJQSyntax(text, cfg.JQFilter)
-			diagnostics = append(diagnostics, jqDiags...)
-		}
-
-		// Environment variable validation
-		envDiags := validateEnvVars(text)
-		diagnostics = append(diagnostics, envDiags...)
+		diagnostics = append(diagnostics, protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: line, Character: char},
+				End:   protocol.Position{Line: line, Character: 100},
+			},
+			Severity: ptr(severityToProtocol(d.Severity)),
+			Source:   ptr("yapi"),
+			Message:  d.Message,
+		})
 	}
 
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
 	})
-}
-
-func findFieldLine(text string, field string) protocol.UInteger {
-	if field == "" {
-		return 0
-	}
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), field+":") {
-			return protocol.UInteger(i)
-		}
-	}
-	return 0
-}
-
-func validateGraphQLSyntax(fullYamlText string, gqlQuery string) []protocol.Diagnostic {
-	src := source.NewSource(&source.Source{
-		Body: []byte(gqlQuery),
-		Name: "GraphQL Query",
-	})
-
-	_, err := parser.Parse(parser.ParseParams{Source: src})
-	if err == nil {
-		return nil
-	}
-
-	// Find where the "graphql:" block starts in the YAML file
-	blockStartLine := findFieldLine(fullYamlText, "graphql")
-
-	// The query content starts on the line after "graphql: |"
-	// so we add 1 to get to the actual query content
-	targetLine := blockStartLine + 1
-
-	return []protocol.Diagnostic{
-		{
-			Range: protocol.Range{
-				Start: protocol.Position{Line: targetLine, Character: 0},
-				End:   protocol.Position{Line: targetLine + 1, Character: 0},
-			},
-			Severity: ptr(protocol.DiagnosticSeverityError),
-			Source:   ptr("yapi"),
-			Message:  "GraphQL syntax error: " + err.Error(),
-		},
-	}
-}
-
-func validateJQSyntax(fullYamlText string, jqFilter string) []protocol.Diagnostic {
-	_, err := gojq.Parse(jqFilter)
-	if err == nil {
-		return nil
-	}
-
-	// Find where the "jq_filter:" field is in the YAML file
-	targetLine := findFieldLine(fullYamlText, "jq_filter")
-
-	return []protocol.Diagnostic{
-		{
-			Range: protocol.Range{
-				Start: protocol.Position{Line: targetLine, Character: 0},
-				End:   protocol.Position{Line: targetLine, Character: 100},
-			},
-			Severity: ptr(protocol.DiagnosticSeverityError),
-			Source:   ptr("yapi"),
-			Message:  "JQ syntax error: " + err.Error(),
-		},
-	}
-}
-
-func validateEnvVars(text string) []protocol.Diagnostic {
-	var diagnostics []protocol.Diagnostic
-	lines := strings.Split(text, "\n")
-
-	for lineNum, line := range lines {
-		refs := envsubst.FindAllWithPositions(line)
-		for _, ref := range refs {
-			missing := envsubst.FindMissing(line[ref.Start:ref.End])
-			if len(missing) > 0 {
-				diagnostics = append(diagnostics, protocol.Diagnostic{
-					Range: protocol.Range{
-						Start: protocol.Position{
-							Line:      protocol.UInteger(lineNum),
-							Character: protocol.UInteger(ref.Start),
-						},
-						End: protocol.Position{
-							Line:      protocol.UInteger(lineNum),
-							Character: protocol.UInteger(ref.End),
-						},
-					},
-					Severity: ptr(protocol.DiagnosticSeverityWarning),
-					Source:   ptr("yapi"),
-					Message:  fmt.Sprintf("environment variable %q is not set", ref.Name),
-				})
-			}
-		}
-	}
-
-	return diagnostics
 }
 
 func ptr[T any](v T) *T {
@@ -308,21 +215,24 @@ func severityToProtocol(s validation.Severity) protocol.DiagnosticSeverity {
 	}
 }
 
-func severityToMessageType(s validation.Severity) protocol.MessageType {
-	switch s {
-	case validation.SeverityError:
-		return protocol.MessageTypeError
-	case validation.SeverityWarning:
-		return protocol.MessageTypeWarning
-	case validation.SeverityInfo:
-		return protocol.MessageTypeInfo
-	default:
-		return protocol.MessageTypeInfo
-	}
-}
-
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// valDesc represents a value with its description for completions
+type valDesc struct {
+	val  string
+	desc string
+}
+
+func toValueCompletion(v valDesc) protocol.CompletionItem {
+	return protocol.CompletionItem{
+		Label:         v.val,
+		Kind:          ptr(protocol.CompletionItemKindValue),
+		Detail:        ptr(v.desc),
+		InsertText:    ptr(v.val),
+		Documentation: v.desc,
+	}
 }
 
 // Schema definitions for completions
@@ -353,10 +263,7 @@ var topLevelKeys = []struct {
 	{"close_after_send", "Close TCP connection after sending (boolean)"},
 }
 
-var methodValues = []struct {
-	val  string
-	desc string
-}{
+var methodValues = []valDesc{
 	{"GET", "HTTP GET request"},
 	{"POST", "HTTP POST request"},
 	{"PUT", "HTTP PUT request"},
@@ -368,19 +275,13 @@ var methodValues = []struct {
 	{"tcp", "Raw TCP request (deprecated)"},
 }
 
-var encodingValues = []struct {
-	val  string
-	desc string
-}{
+var encodingValues = []valDesc{
 	{"text", "Plain text encoding"},
 	{"hex", "Hexadecimal encoding"},
 	{"base64", "Base64 encoding"},
 }
 
-var contentTypeValues = []struct {
-	val  string
-	desc string
-}{
+var contentTypeValues = []valDesc{
 	{"application/json", "JSON content type"},
 }
 
@@ -413,35 +314,11 @@ func textDocumentCompletion(ctx *glsp.Context, params *protocol.CompletionParams
 
 		switch key {
 		case "method":
-			for _, m := range methodValues {
-				items = append(items, protocol.CompletionItem{
-					Label:         m.val,
-					Kind:          ptr(protocol.CompletionItemKindValue),
-					Detail:        ptr(m.desc),
-					InsertText:    ptr(m.val),
-					Documentation: m.desc,
-				})
-			}
+			items = utils.Map(methodValues, toValueCompletion)
 		case "encoding":
-			for _, e := range encodingValues {
-				items = append(items, protocol.CompletionItem{
-					Label:         e.val,
-					Kind:          ptr(protocol.CompletionItemKindValue),
-					Detail:        ptr(e.desc),
-					InsertText:    ptr(e.val),
-					Documentation: e.desc,
-				})
-			}
+			items = utils.Map(encodingValues, toValueCompletion)
 		case "content_type":
-			for _, ct := range contentTypeValues {
-				items = append(items, protocol.CompletionItem{
-					Label:         ct.val,
-					Kind:          ptr(protocol.CompletionItemKindValue),
-					Detail:        ptr(ct.desc),
-					InsertText:    ptr(ct.val),
-					Documentation: ct.desc,
-				})
-			}
+			items = utils.Map(contentTypeValues, toValueCompletion)
 		case "insecure", "plaintext", "close_after_send":
 			items = append(items,
 				protocol.CompletionItem{

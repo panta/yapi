@@ -1,44 +1,20 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
-	"yapi.run/cli/internal/config"
-	"yapi.run/cli/internal/runner"
-
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FAFAFA")).
-			Background(lipgloss.Color("#7D56F4")).
-			Padding(0, 1)
-
-	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666666"))
-
-	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF6B6B"))
-
-	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#69DB7C"))
-
-	warnStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFE066"))
-
-	borderStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7D56F4"))
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666666"))
+	"yapi.run/cli/internal/executor"
+	"yapi.run/cli/internal/runner"
+	"yapi.run/cli/internal/tui/theme"
+	"yapi.run/cli/internal/validation"
 )
 
 type watchModel struct {
@@ -85,18 +61,61 @@ func checkFileCmd(path string, lastMod time.Time) tea.Cmd {
 
 func runYapiCmd(path string) tea.Cmd {
 	return func() tea.Msg {
-		cfg, err := config.LoadConfig(path)
+		analysis, err := validation.AnalyzeConfigFile(path)
 		if err != nil {
-			return runResultMsg{err: fmt.Errorf("config error: %w", err)}
+			return runResultMsg{err: fmt.Errorf("analysis error: %w", err)}
 		}
 
-		opts := runner.Options{NoColor: false}
-		output, result, err := runner.RunAndFormat(cfg, opts)
+		var outputText string
+
+		// Warnings
+		for _, w := range analysis.Warnings {
+			outputText += theme.Warn.Render("[WARN] "+w) + "\n"
+		}
+
+		// Diagnostics
+		for _, d := range analysis.Diagnostics {
+			prefix := "[INFO]"
+			style := theme.Info
+			if d.Severity == validation.SeverityWarning {
+				prefix = "[WARN]"
+				style = theme.Warn
+			}
+			if d.Severity == validation.SeverityError {
+				prefix = "[ERROR]"
+				style = theme.Error
+			}
+			outputText += style.Render(prefix+" "+d.Message) + "\n"
+		}
+
+		if analysis.HasErrors() {
+			return runResultMsg{content: outputText, err: nil}
+		}
+
+		req := analysis.Request
+		if req == nil {
+			return runResultMsg{err: fmt.Errorf("no request parsed")}
+		}
+
+		if outputText != "" {
+			outputText += "\n"
+		}
+
+		// Create executor
+		httpClient := &http.Client{Timeout: 30 * time.Second}
+		factory := executor.NewFactory(httpClient)
+		exec, err := factory.Create(req.Metadata["transport"])
 		if err != nil {
 			return runResultMsg{err: err}
 		}
 
-		return runResultMsg{content: output, duration: result.Duration}
+		opts := runner.Options{NoColor: false}
+		output, result, err := runner.RunAndFormat(context.Background(), exec, req, analysis.Warnings, opts)
+		if err != nil {
+			return runResultMsg{err: err}
+		}
+
+		return runResultMsg{content: outputText + output, duration: result.Duration}
 	}
 }
 
@@ -105,7 +124,7 @@ func NewWatchModel(path string) watchModel {
 		filepath:    path,
 		content:     "Loading...",
 		status:      "starting",
-		statusStyle: infoStyle,
+		statusStyle: theme.Info,
 	}
 }
 
@@ -127,7 +146,7 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "r":
 			m.status = "running..."
-			m.statusStyle = infoStyle
+			m.statusStyle = theme.Info
 			return m, runYapiCmd(m.filepath)
 		}
 
@@ -158,7 +177,7 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastMod = info.ModTime()
 		}
 		m.status = "running..."
-		m.statusStyle = infoStyle
+		m.statusStyle = theme.Info
 		cmds = append(cmds, runYapiCmd(m.filepath))
 
 	case runResultMsg:
@@ -166,14 +185,14 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.duration = msg.duration
 		if msg.err != nil {
 			m.err = msg.err
-			m.content = errorStyle.Render(msg.err.Error())
+			m.content = theme.Error.Render(msg.err.Error())
 			m.status = "error"
-			m.statusStyle = errorStyle
+			m.statusStyle = theme.Error
 		} else {
 			m.err = nil
 			m.content = msg.content
 			m.status = "ok"
-			m.statusStyle = successStyle
+			m.statusStyle = theme.Success
 		}
 		if m.ready {
 			m.viewport.SetContent(m.content)
@@ -196,11 +215,11 @@ func (m watchModel) View() string {
 
 	// Header
 	filename := filepath.Base(m.filepath)
-	title := titleStyle.Render(" yapi watch ")
-	fileInfo := infoStyle.Render(filename)
+	title := theme.Title.Render(" yapi watch ")
+	fileInfo := theme.Info.Render(filename)
 	statusText := m.statusStyle.Render(fmt.Sprintf("[%s]", m.status))
-	timeText := infoStyle.Render(m.lastRun.Format("15:04:05"))
-	durationText := infoStyle.Render(fmt.Sprintf("(%s)", m.duration.Round(time.Millisecond)))
+	timeText := theme.Info.Render(m.lastRun.Format("15:04:05"))
+	durationText := theme.Info.Render(fmt.Sprintf("(%s)", m.duration.Round(time.Millisecond)))
 
 	header := lipgloss.JoinHorizontal(
 		lipgloss.Center,
@@ -216,10 +235,10 @@ func (m watchModel) View() string {
 	)
 
 	// Footer
-	help := helpStyle.Render("q: quit • r: refresh • ↑/↓: scroll")
+	help := theme.Help.Render("q: quit • r: refresh • ↑/↓: scroll")
 
 	// Content
-	content := borderStyle.Width(m.width - 2).Render(m.viewport.View())
+	content := theme.BorderedBox.Width(m.width - 2).Render(m.viewport.View())
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

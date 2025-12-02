@@ -1,38 +1,49 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
-	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/executor"
 	"yapi.run/cli/internal/langserver"
 	"yapi.run/cli/internal/runner"
 	"yapi.run/cli/internal/tui"
+	"yapi.run/cli/internal/validation"
 )
 
-var (
-	configPath  string
-	urlOverride string
-	noColor     bool
-)
+type rootCommand struct {
+	urlOverride     string
+	noColor         bool
+	httpClient      *http.Client
+	executorFactory *executor.Factory
+}
 
 func main() {
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	app := &rootCommand{
+		httpClient:      httpClient,
+		executorFactory: executor.NewFactory(httpClient),
+	}
 	rootCmd := &cobra.Command{
 		Use:   "yapi",
 		Short: "yapi is a unified API client for HTTP, gRPC, and TCP",
-		Run:   runInteractive,
+		Run:   app.runInteractive,
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&urlOverride, "url", "u", "", "Override the URL specified in the config file")
-	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable color output")
+	rootCmd.PersistentFlags().StringVarP(&app.urlOverride, "url", "u", "", "Override the URL specified in the config file")
+	rootCmd.PersistentFlags().BoolVar(&app.noColor, "no-color", false, "Disable color output")
 
-	rootCmd.AddCommand(newRunCmd())
-	rootCmd.AddCommand(newWatchCmd())
+	rootCmd.AddCommand(app.newRunCmd())
+	rootCmd.AddCommand(app.newWatchCmd())
 	rootCmd.AddCommand(newHistoryCmd())
 	rootCmd.AddCommand(newLSPCmd())
 
@@ -42,27 +53,27 @@ func main() {
 	}
 }
 
-func runInteractive(cmd *cobra.Command, args []string) {
+func (app *rootCommand) runInteractive(cmd *cobra.Command, args []string) {
 	selectedPath, err := tui.FindConfigFileSingle()
 	if err != nil {
 		log.Fatalf("Failed to select config file: %v", err)
 	}
-	runConfigPath(selectedPath)
+	app.runConfigPath(selectedPath)
 }
 
-func newRunCmd() *cobra.Command {
+func (app *rootCommand) newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run <file>",
 		Short: "Run a request defined in a yapi config file",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runConfigPath(args[0])
+			app.runConfigPath(args[0])
 		},
 	}
 	return cmd
 }
 
-func newWatchCmd() *cobra.Command {
+func (app *rootCommand) newWatchCmd() *cobra.Command {
 	var pretty bool
 	var noPretty bool
 
@@ -84,8 +95,6 @@ func newWatchCmd() *cobra.Command {
 				path = args[0]
 			}
 
-			// --pretty forces pretty mode, --no-pretty disables it
-			// Default: pretty in interactive mode, simple when file is passed
 			usePretty := pretty || (interactive && !noPretty)
 
 			if usePretty {
@@ -93,7 +102,7 @@ func newWatchCmd() *cobra.Command {
 					log.Fatalf("Watch failed: %v", err)
 				}
 			} else {
-				watchConfigPath(path)
+				app.watchConfigPath(path)
 			}
 		},
 	}
@@ -104,7 +113,7 @@ func newWatchCmd() *cobra.Command {
 	return cmd
 }
 
-func watchConfigPath(path string) {
+func (app *rootCommand) watchConfigPath(path string) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		log.Fatalf("Failed to resolve path: %v", err)
@@ -113,7 +122,7 @@ func watchConfigPath(path string) {
 	// Initial run
 	clearScreen()
 	printWatchHeader(absPath)
-	runConfigPathSafe(absPath)
+	app.runConfigPathSafe(absPath)
 
 	// Get initial mod time
 	lastMod := getModTime(absPath)
@@ -128,7 +137,7 @@ func watchConfigPath(path string) {
 			lastMod = currentMod
 			clearScreen()
 			printWatchHeader(absPath)
-			runConfigPathSafe(absPath)
+			app.runConfigPathSafe(absPath)
 		}
 	}
 }
@@ -150,26 +159,124 @@ func printWatchHeader(path string) {
 	fmt.Printf("\033[2m[%s]\033[0m\n\n", time.Now().Format("15:04:05"))
 }
 
-func runConfigPathSafe(path string) {
-	cfg, err := config.LoadConfig(path)
+// runContext holds options for executeRun
+type runContext struct {
+	path   string
+	strict bool // If true, os.Exit(1) on errors; if false, print and return
+}
+
+// executeRun is the unified execution pipeline for both Run and Watch modes.
+func (app *rootCommand) executeRun(ctx runContext) {
+	analysis, err := validation.AnalyzeConfigFile(ctx.path)
 	if err != nil {
-		fmt.Printf("\033[31mError loading config: %v\033[0m\n", err)
+		app.handleError(err, ctx.strict)
+		return
+	}
+
+	// Print errors only (warnings come after output)
+	app.printErrors(analysis, ctx.strict)
+
+	if analysis.HasErrors() {
+		if ctx.strict {
+			os.Exit(1)
+		}
+		return
+	}
+
+	req := analysis.Request
+	if req == nil {
+		if ctx.strict {
+			os.Exit(1)
+		}
+		return
+	}
+
+	if ctx.strict {
+		logHistory(ctx.path, app.urlOverride)
+	}
+
+	exec, err := app.createExecutor(req.Metadata["transport"])
+	if err != nil {
+		app.handleError(err, ctx.strict)
 		return
 	}
 
 	opts := runner.Options{
-		URLOverride: urlOverride,
-		NoColor:     noColor,
+		URLOverride: app.urlOverride,
+		NoColor:     app.noColor,
 	}
 
-	output, result, err := runner.RunAndFormat(cfg, opts)
+	output, result, err := runner.RunAndFormat(context.Background(), exec, req, nil, opts)
 	if err != nil {
-		fmt.Printf("\033[31m%v\033[0m\n", err)
+		app.handleError(err, ctx.strict)
 		return
 	}
 
 	fmt.Println(output)
 	printResultMeta(result)
+	app.printWarnings(analysis, ctx.strict)
+}
+
+// handleError prints an error, optionally exiting for strict mode
+func (app *rootCommand) handleError(err error, strict bool) {
+	if strict {
+		log.Fatalf("%v", err)
+	} else {
+		fmt.Printf("\033[31m%v\033[0m\n", err)
+	}
+}
+
+// printErrors prints only error-level diagnostics (before request runs)
+func (app *rootCommand) printErrors(analysis *validation.Analysis, strict bool) {
+	out := os.Stdout
+	if strict {
+		out = os.Stderr
+	}
+
+	for _, d := range analysis.Diagnostics {
+		if d.Severity != validation.SeverityError {
+			continue
+		}
+		lineInfo := ""
+		if d.Line >= 0 {
+			lineInfo = fmt.Sprintf(" (line %d)", d.Line+1)
+		}
+		fmt.Fprintf(out, "\033[31m[ERROR]%s %s\033[0m\n", lineInfo, d.Message)
+	}
+}
+
+// printWarnings prints warnings and info diagnostics (after output)
+func (app *rootCommand) printWarnings(analysis *validation.Analysis, strict bool) {
+	out := os.Stdout
+	if strict {
+		out = os.Stderr
+	}
+
+	for _, w := range analysis.Warnings {
+		fmt.Fprintf(out, "\033[33m[WARN] %s\033[0m\n", w)
+	}
+
+	for _, d := range analysis.Diagnostics {
+		if d.Severity == validation.SeverityError {
+			continue
+		}
+		prefix := "[INFO]"
+		color := "\033[36m"
+		if d.Severity == validation.SeverityWarning {
+			prefix = "[WARN]"
+			color = "\033[33m"
+		}
+		lineInfo := ""
+		if d.Line >= 0 {
+			lineInfo = fmt.Sprintf(" (line %d)", d.Line+1)
+		}
+		fmt.Fprintf(out, "%s%s%s %s\033[0m\n", color, prefix, lineInfo, d.Message)
+	}
+}
+
+// runConfigPathSafe runs a config file without exiting on error (for watch mode)
+func (app *rootCommand) runConfigPathSafe(path string) {
+	app.executeRun(runContext{path: path, strict: false})
 }
 
 func newLSPCmd() *cobra.Command {
@@ -182,26 +289,13 @@ func newLSPCmd() *cobra.Command {
 	}
 }
 
-func runConfigPath(path string) {
-	cfg, err := config.LoadConfig(path)
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
+// runConfigPath runs a config file in strict mode (exits on error)
+func (app *rootCommand) runConfigPath(path string) {
+	app.executeRun(runContext{path: path, strict: true})
+}
 
-	logHistory(path, urlOverride)
-
-	opts := runner.Options{
-		URLOverride: urlOverride,
-		NoColor:     noColor,
-	}
-
-	output, result, err := runner.RunAndFormat(cfg, opts)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	fmt.Println(output)
-	printResultMeta(result)
+func (app *rootCommand) createExecutor(transport string) (executor.Executor, error) {
+	return app.executorFactory.Create(transport)
 }
 
 // dim wraps text in ANSI dim escape codes

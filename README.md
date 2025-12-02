@@ -31,6 +31,7 @@ make install
 1.  **Create a request file** (e.g., `get-user.yapi.yml`):
 
     ```yaml
+    yapi: v1
     url: https://jsonplaceholder.typicode.com/users/1
     method: GET
     ```
@@ -43,6 +44,8 @@ make install
 
 3.  **See the magic:** You get a beautifully highlighted, formatted response.
 
+> **Note:** The `yapi: v1` version tag is required at the top of all config files. This enables future schema evolution while maintaining backwards compatibility.
+
 -----
 
 ## 📚 Examples
@@ -54,6 +57,7 @@ make install
 No more escaping quotes in curl.
 
 ```yaml
+yapi: v1
 url: https://api.example.com/posts
 method: POST
 content_type: application/json
@@ -74,6 +78,7 @@ body:
 Use shell environment variables directly. Perfect for CI/CD or keeping secrets out of git.
 
 ```yaml
+yapi: v1
 url: https://api.example.com/secure-data
 method: GET
 
@@ -87,6 +92,7 @@ headers:
 Don't grep output. Filter it right in the config.
 
 ```yaml
+yapi: v1
 url: https://jsonplaceholder.typicode.com/users
 method: GET
 
@@ -99,6 +105,7 @@ jq_filter: "[.[] | {name, email}] | sort_by(.name)"
 Stop hunting for `.proto` files. If your server supports reflection, **yapi** just works.
 
 ```yaml
+yapi: v1
 url: grpc://localhost:50051
 service: helloworld.Greeter
 rpc: SayHello
@@ -112,6 +119,7 @@ body:
 First-class support for queries and variables.
 
 ```yaml
+yapi: v1
 url: https://countries.trevorblades.com/graphql
 
 graphql: |

@@ -1,13 +1,13 @@
-#!/bin/sh
-# Run all example yapi files
-set -e
+#!/bin/bash
+# run all example yapi files
+set -eou pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+root_dir="$(cd "$script_dir/.." && pwd)"
 
-echo "Testing all example files..."
-find "$ROOT_DIR/examples" -type f \( -name "*.yml" -o -name "*.yaml" \) | sort | while read -r example; do
-  echo "Testing: $example"
+echo "testing all example files..."
+find "$root_dir/examples" -type f \( -name "*.yml" -o -name "*.yaml" \) | sort | while read -r example; do
+  echo "testing: $example"
   yapi run "$example" || exit 1
 done
-echo "All examples tested successfully"
+echo "all examples tested successfully"
