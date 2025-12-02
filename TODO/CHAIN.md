@@ -45,6 +45,31 @@ chain:
       Authorization: Bearer ${auth.token}
 ```
 
+## implicit validation
+
+accessing a response field implies it must exist:
+
+```yaml
+chain:
+  - name: auth
+    url: https://api.com/login
+    # response: { "token": "abc123", "user": { "id": 42 } }
+
+  - name: fetch
+    url: https://api.com/users/${auth.user.id}
+    headers:
+      Authorization: Bearer ${auth.token}
+
+    # this expect block is redundant - the field access above
+    # already implies these fields must exist
+    # expect:
+    #   jq:
+    #     - .user.id
+    #     - .token
+```
+
+see TODO/VALIDATE.md for more about validation.
+
 ## backwards compat
 
 single request files stay the same (no `chain` key):
