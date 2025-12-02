@@ -19,6 +19,13 @@ import (
 	"yapi.run/cli/internal/validation"
 )
 
+// ANSI color codes (matching theme orange accent #ff9e64)
+const (
+	colorOrange = "\033[38;2;255;158;100m"
+	colorReset  = "\033[0m"
+	colorDim    = "\033[2m"
+)
+
 type rootCommand struct {
 	urlOverride string
 	noColor     bool
@@ -152,8 +159,9 @@ func clearScreen() {
 }
 
 func printWatchHeader(path string) {
-	fmt.Printf("\033[2m[watching %s]\033[0m\n", filepath.Base(path))
-	fmt.Printf("\033[2m[%s]\033[0m\n\n", time.Now().Format("15:04:05"))
+	fmt.Printf("%s🐑 yapi watch%s\n\n", colorOrange, colorReset)
+	fmt.Printf("%s[watching %s]%s\n", colorDim, filepath.Base(path), colorReset)
+	fmt.Printf("%s[%s]%s\n\n", colorDim, time.Now().Format("15:04:05"), colorReset)
 }
 
 // runContext holds options for executeRun
