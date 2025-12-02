@@ -4,10 +4,35 @@
 - add real lsp to playground (maybe over http, maybe wasm, local)
 - vscode extension
 - jetbrains extension
-- add yapi version to top of all yapi file:
+- bug with `f` in fuzzy search mode
+- add number of lines, chars, mb to the output summary
+
+- add yapi version to top of all yapi file
 ```yapi
 yapi: v1
 url: foobar.com
 method: GET
 ```
+we'll need to probs maintain all versions of yapi files.
+
+- add expect for status codes, headers, json schema, etc
+```yapi
+yapi: v1
+url: foobar.com
+method: GET
+expect:
+   # can we use jq to validate what we get back?
+   jq_schema: |
+      {
+         "type": "object",
+         "properties": {
+            "id": { "type": "integer" },
+            "name": { "type": "string" }
+         },
+         "required": ["id", "name"]
+      }
+
+```
+
+
 
