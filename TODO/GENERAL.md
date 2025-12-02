@@ -1,0 +1,8 @@
+# general todos
+
+- record videos to put on website
+- record videos for gifs for readme
+- add real lsp to playground (maybe over http, maybe wasm, local)
+- vscode extension
+- jetbrains extension
+- maybe interactive history? `yapi history` shows previous commands, arrow up/down to navigate, enter to select?
