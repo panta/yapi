@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 const Editor = dynamic(() => import("./Editor"), { ssr: false });
 
 const DEFAULT_YAML = `url: https://jsonplaceholder.typicode.com/posts
+yapi: v1
 method: POST
 content_type: application/json
 query:
