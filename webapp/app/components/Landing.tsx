@@ -253,14 +253,21 @@ chain:
     url: https://my-blog/posts/\${create_draft.id}/publish
     method: POST
 
-  # Step 3: Verify the post is now live.
+  # Step 3: Verify the post is now live and the API response is correct.
   - name: verify_published
     url: https://my-blog/posts/\${create_draft.id}
     expect:
-      # Check for a 200 OK status code.
       status: 200
-      # Use jq to assert the response body has a "published" status.
+      headers:
+        Content-Type: application/json
       jq: .status == "published"
+      schema:
+        type: object
+        properties:
+          id: { type: integer }
+          title: { type: string }
+          status: { type: string }
+        required: [id, title, status]
                 `.trim()}
             />
           </div>
