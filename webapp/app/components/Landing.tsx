@@ -284,4 +284,111 @@ chain:
           <div className="text-yapi-fg-muted text-sm font-mono hover:text-yapi-accent transition-colors cursor-copy select-all">
             rm -rf postman && go install yapi
           </div>
-          <div className=\"flex gap-6\">\n            <a href=\"https://github.com/jamierpond/yapi\" className=\"text-yapi-fg-subtle hover:text-yapi-accent transition-colors text-sm\">Source Code</a>\n          </div>\n        </div>\n      </footer>\n\n      <style jsx global>{`\n        @keyframes shine {\n          to {\n            background-position: 200% center;\n          }\n        }\n        .animate-shine {\n          animation: shine 4s linear infinite;\n        }\n        .animate-pulse-slow {\n          animation: pulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;\n        }\n        .perspective-1000 {\n          perspective: 1000px;\n        }\n        @keyframes crawl {\n          0% {\n            top: 100%;\n            transform: rotateX(20deg) scale(1);\n          }\n          100% {\n            top: -200%;\n            transform: rotateX(20deg) scale(0.6);\n          }\n        }\n        .star-wars-crawl {\n          animation: crawl 60s linear infinite;\n        }\n      `}</style>\n    </div>\n  );\n}\n\nfunction HeroCodeViewer() {\n  const codeContent = `\nyapi: v1\n\n# Define a chain of requests\nchain:\n\n  # Step 1: Authenticate and get a token\n  - name: login\n    url: https://api.example.com/auth\n    method: POST\n    body:\n      email: \"\\${EMAIL}\"\n      password: \"\\${PASSWORD}\"\n    expect:\n      status: 200\n      body:\n        access_token: exists\n\n  # Step 2: Fetch user profile using the token\n  - name: get_profile\n    url: https://api.example.com/me\n    headers:\n      Authorization: Bearer \\${login.access_token}\n    expect:\n      status: 200\n      jq: .id == \"\\${USER_ID}\"\n\n  # Step 3: Update user bio\n  - name: update_bio\n    url: https://api.example.com/me\n    method: PATCH\n    body:\n      bio: \"Hello from Yapi!\"\n    headers:\n      Authorization: Bearer \\${login.access_token}\n    expect:\n      status: 200\n      jq: .bio == \"Hello from Yapi!\"\n  `;\n\n  const highlight = (line: string) => {\n    // Highlight keys\n    line = line.replace(/^(\\s*[- ]*\\s*)([a-zA-Z0-9_]+)(:)/g, \'$1<span class=\"text-yapi-accent\">$2</span>$3\');\n    // Highlight variables\n    line = line.replace(/(\\\\?\\$\\{.+?\\})/g, \'<span class=\"text-orange-400\">$1</span>\');\n    // Highlight comments\n    line = line.replace(/(#.*$)/g, \'<span class=\"text-yapi-fg-subtle/80\">$1</span>\');\n    // Highlight methods/keywords\n    line = line.replace(/(url|method|body|headers|expect|status|jq|schema|name|type|properties|required):/g, \'<span class=\"text-blue-400\">$&</span>\');\n    // Highlight strings/values\n    line = line.replace(/(\".*?\")|(\'.*?\')|(\\btrue\\b|\\bfalse\\b|\\bnull\\b)/g, \'<span class=\"text-green-400\">$1$2$3</span>\');\n    // Highlight numbers\n    line = line.replace(/(\\b\\d+\\b)/g, \'<span class=\"text-purple-400\">$1</span>\');\n    // Special handling for the expect status codes (e.g., 200, 2xx)\n    line = line.replace(/(status: )(\\d{3}|\\dxx|)\/g, \'$1<span class=\"text-green-400\">$2</span>\');\n    return line;\n  };\n\n  return (\n    <div className=\"absolute inset-0 z-0 overflow-hidden flex justify-center items-start perspective-500 pointer-events-none\">\n      <div className=\"absolute top-full w-[80%] max-w-4xl h-auto text-center text-2xl md:text-3xl lg:text-4xl leading-relaxed font-mono text-yapi-fg-muted/50 star-wars-crawl transform-origin-bottom-center\">\n        {codeContent.split(\'\\n\').map((line, i) => (\n          <div key={i} dangerouslySetInnerHTML={{ __html: highlight(line) || \'&nbsp;\' }} />\n        ))}\n      </div>\n    </div>\n  );\n}
+          <div className="flex gap-6">
+            <a href="https://github.com/jamierpond/yapi" className="text-yapi-fg-subtle hover:text-yapi-accent transition-colors text-sm">Source Code</a>
+          </div>
+        </div>
+      </footer>
+
+      <style jsx global>{`
+        @keyframes shine {
+          to {
+            background-position: 200% center;
+          }
+        }
+        .animate-shine {
+          animation: shine 4s linear infinite;
+        }
+        .animate-pulse-slow {
+          animation: pulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .perspective-1000 {
+          perspective: 1000px;
+        }
+        @keyframes crawl {
+          0% {
+            top: 100%;
+            transform: rotateX(20deg) scale(1);
+          }
+          100% {
+            top: -200%;
+            transform: rotateX(20deg) scale(0.6);
+          }
+        }
+        .star-wars-crawl {
+          animation: crawl 60s linear infinite;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function HeroCodeViewer() {
+  const codeContent = `
+yapi: v1
+
+# Define a chain of requests
+chain:
+
+  # Step 1: Authenticate and get a token
+  - name: login
+    url: https://api.example.com/auth
+    method: POST
+    body:
+      email: "\${EMAIL}"
+      password: "\${PASSWORD}"
+    expect:
+      status: 200
+      body:
+        access_token: exists
+
+  # Step 2: Fetch user profile using the token
+  - name: get_profile
+    url: https://api.example.com/me
+    headers:
+      Authorization: Bearer \${login.access_token}
+    expect:
+      status: 200
+      jq: .id == "\${USER_ID}"
+
+  # Step 3: Update user bio
+  - name: update_bio
+    url: https://api.example.com/me
+    method: PATCH
+    body:
+      bio: "Hello from Yapi!"
+    headers:
+      Authorization: Bearer \${login.access_token}
+    expect:
+      status: 200
+      jq: .bio == "Hello from Yapi!"
+  `;
+
+  const highlight = (line: string) => {
+    // Highlight keys
+    line = line.replace(/^(\s*[- ]*\s*)([a-zA-Z0-9_]+)(:)/g, '$1<span class="text-yapi-accent">$2</span>$3');
+    // Highlight variables
+    line = line.replace(/(\\?\$\{.+?\})/g, '<span class="text-orange-400">$1</span>');
+    // Highlight comments
+    line = line.replace(/(#.*$)/g, '<span class="text-yapi-fg-subtle/80">$1</span>');
+    // Highlight methods/keywords
+    line = line.replace(/(url|method|body|headers|expect|status|jq|schema|name|type|properties|required):/g, '<span class="text-blue-400">$&</span>');
+    // Highlight strings/values
+    line = line.replace(/(".*?")|('.*?')|(\btrue\b|\bfalse\b|\bnull\b)/g, '<span class="text-green-400">$1$2$3</span>');
+    // Highlight numbers
+    line = line.replace(/(\b\d+\b)/g, '<span class="text-purple-400">$1</span>');
+    // Special handling for the expect status codes (e.g., 200, 2xx)
+    line = line.replace(/(status: )(\d{3}|\dxx)/g, '$1<span class="text-green-400">$2</span>');
+    return line;
+  };
+
+  return (
+    <div className="absolute inset-0 z-0 overflow-hidden flex justify-center items-start perspective-500 pointer-events-none">
+      <div className="absolute top-full w-[80%] max-w-4xl h-auto text-center text-2xl md:text-3xl lg:text-4xl leading-relaxed font-mono text-yapi-fg-muted/50 star-wars-crawl transform-origin-bottom-center">
+        {codeContent.split('\n').map((line, i) => (
+          <div key={i} dangerouslySetInnerHTML={{ __html: highlight(line) || '&nbsp;' }} />
+        ))}
+      </div>
+    </div>
+  );
+}
