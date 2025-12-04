@@ -1,5 +1,7 @@
 # 🐑 yapi
 
+[![CLI](https://github.com/jamierpond/yapi/actions/workflows/cli.yml/badge.svg)](https://github.com/jamierpond/yapi/actions/workflows/cli.yml)
+
 **The API client that lives in your terminal (and your git repo).**
 
 Stop clicking through heavy Electron apps just to send a JSON body. **yapi** is a CLI-first, offline-first, git-friendly API client for HTTP, gRPC, and TCP. It uses simple YAML files to define requests, meaning you can commit them, review them, and run them anywhere.
