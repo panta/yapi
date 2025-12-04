@@ -1,5 +1,6 @@
 # general todos
 
+- add to-curl for http requests
 - record videos to put on website
 - record videos for gifs for readme
 - add real lsp to playground (maybe over http, maybe wasm, local)
