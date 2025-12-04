@@ -237,20 +237,24 @@ export default function Landing() {
             <FeatureCard
                 icon="⛓️"
                 title="Coming Soon: Request Chaining"
-                desc="Define multi-step workflows in one YAML file. Pass outputs from one request (like auth tokens) as inputs to the next. Integration testing has never been this easy."
+                desc="Automate entire end-to-end workflows. Chain requests declaratively, passing data from one step to the next to test complex API flows as simply as writing a config file."
                 code={`
+# E2E test for a new blog post
 yapi: v1
 chain:
-  - name: login
-    url: https://api.acme.com/auth
-    body:
-      email:    \${EMAIL}
-      password: \${PASSWORD}
+  - name: create_draft
+    url: https://my-blog/posts
+    body: { title: "Hello, Yapi!" }
 
-  - name: get_profile
-    url: https://api.acme.com/me
-    headers:
-      Authorization: Bearer \${login.access_token}
+  - name: publish_post
+    url: https://my-blog/posts/\${create_draft.id}/publish
+    method: POST
+
+  - name: verify_published
+    url: https://my-blog/posts/\${create_draft.id}
+    expect:
+      status: 200
+      jq: .status == "published"
                 `.trim()}
             />
           </div>
@@ -270,7 +274,7 @@ chain:
         </div>
       </footer>
 
-      <style jsx global>{\`
+      <style jsx global>{`
         @keyframes shine {
           to {
             background-position: 200% center;
@@ -285,7 +289,7 @@ chain:
         .perspective-1000 {
           perspective: 1000px;
         }
-      \`}</style>
+      `}</style>
     </div>
   );
 }
