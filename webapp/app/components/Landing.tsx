@@ -18,6 +18,9 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen flex flex-col bg-yapi-bg relative overflow-hidden font-sans text-yapi-fg selection:bg-yapi-accent selection:text-white">
+      {/* Hero Code Viewer (Star Wars style) */}
+      <HeroCodeViewer />
+
       {/* --- Fun Layer: Background Grid & Noise --- */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {/* Moving Grid */}
@@ -281,86 +284,4 @@ chain:
           <div className="text-yapi-fg-muted text-sm font-mono hover:text-yapi-accent transition-colors cursor-copy select-all">
             rm -rf postman && go install yapi
           </div>
-          <div className="flex gap-6">
-            <a href="https://github.com/jamierpond/yapi" className="text-yapi-fg-subtle hover:text-yapi-accent transition-colors text-sm">Source Code</a>
-          </div>
-        </div>
-      </footer>
-
-      <style jsx global>{`
-        @keyframes shine {
-          to {
-            background-position: 200% center;
-          }
-        }
-        .animate-shine {
-          animation: shine 4s linear infinite;
-        }
-        .animate-pulse-slow {
-          animation: pulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        .perspective-1000 {
-          perspective: 1000px;
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function FeatureCard({ icon, title, desc, code }: { icon: string, title: string, desc: string, code?: string }) {
-  return (
-    <div className="group p-8 rounded-2xl bg-yapi-bg-elevated/50 border border-yapi-border backdrop-blur-sm hover:border-yapi-accent/30 hover:bg-yapi-bg-elevated/80 transition-all duration-300 hover:-translate-y-1 flex flex-col">
-      <div className="flex-shrink-0">
-        <div className="h-12 w-12 rounded-lg bg-yapi-bg-subtle flex items-center justify-center mb-6 text-2xl shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
-          {icon}
-        </div>
-        <h3 className="text-xl font-bold mb-3 font-mono group-hover:text-yapi-accent transition-colors">{title}</h3>
-        <p className="text-yapi-fg-muted leading-relaxed text-sm">
-          {desc}
-        </p>
-      </div>
-      {code && (
-        <div className="mt-6 flex-grow flex flex-col">
-          <YamlCode code={code} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function YamlCode({ code }: { code: string }) {
-  const highlight = (line: string) => {
-    // Highlight keys (e.g., "url:")
-    line = line.replace(/^(\s*[- ]*\s*)([a-zA-Z0-9_]+)(:)/g, '$1<span class="text-yapi-accent">$2</span>$3');
-    // Highlight variables (e.g., ${EMAIL})
-    line = line.replace(/(\$\{.+?\})/g, '<span class="text-orange-400">$1</span>');
-    // Highlight comments
-    line = line.replace(/(#.*$)/g, '<span class="text-yapi-fg-subtle/80">$1</span>');
-    return line;
-  };
-
-  return (
-    <div className="relative bg-[#1e1e1e] border border-yapi-border/80 rounded-xl shadow-lg overflow-hidden flex-grow flex flex-col">
-      {/* Terminal Header */}
-      <div className="bg-[#2d2d2d] px-4 py-2.5 flex items-center gap-2 border-b border-white/5 flex-shrink-0">
-        <div className="flex gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f56]/80"></div>
-          <div className="w-3 h-3 rounded-full bg-[#ffbd2e]/80"></div>
-          <div className="w-3 h-3 rounded-full bg-[#27c93f]/80"></div>
-        </div>
-        <div className="flex-1 text-center font-mono text-xs text-yapi-fg-muted/60 ml-[-50px]">
-          request-chain.yapi.yml
-        </div>
-      </div>
-
-      <pre className="p-4 font-mono text-xs overflow-x-auto text-white/80 flex-grow">
-        <code className="block">
-          {code.split('\n').map((line, i) => (
-            <div key={i} dangerouslySetInnerHTML={{ __html: highlight(line) || '&nbsp;' }} />
-          ))}
-          <span className="animate-pulse inline-block w-2 h-3 bg-yapi-accent ml-1 align-middle"></span>
-        </code>
-      </pre>
-    </div>
-  );
-}
+          <div className=\"flex gap-6\">\n            <a href=\"https://github.com/jamierpond/yapi\" className=\"text-yapi-fg-subtle hover:text-yapi-accent transition-colors text-sm\">Source Code</a>\n          </div>\n        </div>\n      </footer>\n\n      <style jsx global>{`\n        @keyframes shine {\n          to {\n            background-position: 200% center;\n          }\n        }\n        .animate-shine {\n          animation: shine 4s linear infinite;\n        }\n        .animate-pulse-slow {\n          animation: pulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;\n        }\n        .perspective-1000 {\n          perspective: 1000px;\n        }\n        @keyframes crawl {\n          0% {\n            top: 100%;\n            transform: rotateX(20deg) scale(1);\n          }\n          100% {\n            top: -200%;\n            transform: rotateX(20deg) scale(0.6);\n          }\n        }\n        .star-wars-crawl {\n          animation: crawl 60s linear infinite;\n        }\n      `}</style>\n    </div>\n  );\n}\n\nfunction HeroCodeViewer() {\n  const codeContent = `\nyapi: v1\n\n# Define a chain of requests\nchain:\n\n  # Step 1: Authenticate and get a token\n  - name: login\n    url: https://api.example.com/auth\n    method: POST\n    body:\n      email: \"\\${EMAIL}\"\n      password: \"\\${PASSWORD}\"\n    expect:\n      status: 200\n      body:\n        access_token: exists\n\n  # Step 2: Fetch user profile using the token\n  - name: get_profile\n    url: https://api.example.com/me\n    headers:\n      Authorization: Bearer \\${login.access_token}\n    expect:\n      status: 200\n      jq: .id == \"\\${USER_ID}\"\n\n  # Step 3: Update user bio\n  - name: update_bio\n    url: https://api.example.com/me\n    method: PATCH\n    body:\n      bio: \"Hello from Yapi!\"\n    headers:\n      Authorization: Bearer \\${login.access_token}\n    expect:\n      status: 200\n      jq: .bio == \"Hello from Yapi!\"\n  `;\n\n  const highlight = (line: string) => {\n    // Highlight keys\n    line = line.replace(/^(\\s*[- ]*\\s*)([a-zA-Z0-9_]+)(:)/g, \'$1<span class=\"text-yapi-accent\">$2</span>$3\');\n    // Highlight variables\n    line = line.replace(/(\\\\?\\$\\{.+?\\})/g, \'<span class=\"text-orange-400\">$1</span>\');\n    // Highlight comments\n    line = line.replace(/(#.*$)/g, \'<span class=\"text-yapi-fg-subtle/80\">$1</span>\');\n    // Highlight methods/keywords\n    line = line.replace(/(url|method|body|headers|expect|status|jq|schema|name|type|properties|required):/g, \'<span class=\"text-blue-400\">$&</span>\');\n    // Highlight strings/values\n    line = line.replace(/(\".*?\")|(\'.*?\')|(\\btrue\\b|\\bfalse\\b|\\bnull\\b)/g, \'<span class=\"text-green-400\">$1$2$3</span>\');\n    // Highlight numbers\n    line = line.replace(/(\\b\\d+\\b)/g, \'<span class=\"text-purple-400\">$1</span>\');\n    // Special handling for the expect status codes (e.g., 200, 2xx)\n    line = line.replace(/(status: )(\\d{3}|\\dxx|)\/g, \'$1<span class=\"text-green-400\">$2</span>\');\n    return line;\n  };\n\n  return (\n    <div className=\"absolute inset-0 z-0 overflow-hidden flex justify-center items-start perspective-500 pointer-events-none\">\n      <div className=\"absolute top-full w-[80%] max-w-4xl h-auto text-center text-2xl md:text-3xl lg:text-4xl leading-relaxed font-mono text-yapi-fg-muted/50 star-wars-crawl transform-origin-bottom-center\">\n        {codeContent.split(\'\\n\').map((line, i) => (\n          <div key={i} dangerouslySetInnerHTML={{ __html: highlight(line) || \'&nbsp;\' }} />\n        ))}\n      </div>\n    </div>\n  );\n}
