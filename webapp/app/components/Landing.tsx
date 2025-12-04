@@ -392,3 +392,21 @@ chain:
     </div>
   );
 }
+
+function FeatureCard({ icon, title, desc, code }: { icon: string; title: string; desc: string; code?: string }) {
+  return (
+    <div className="group relative p-6 bg-yapi-bg-elevated/50 border border-yapi-border/50 rounded-xl hover:border-yapi-accent/50 transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,102,0,0.1)]">
+      <div className="absolute inset-0 bg-gradient-to-br from-yapi-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-xl"></div>
+      <div className="relative z-10">
+        <div className="text-3xl mb-4">{icon}</div>
+        <h3 className="text-lg font-bold mb-2 text-yapi-fg">{title}</h3>
+        <p className="text-yapi-fg-muted text-sm leading-relaxed">{desc}</p>
+        {code && (
+          <pre className="mt-4 p-4 bg-black/50 rounded-lg text-xs font-mono text-yapi-fg-muted overflow-x-auto">
+            <code>{code}</code>
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
