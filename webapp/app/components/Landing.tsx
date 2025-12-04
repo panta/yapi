@@ -64,13 +64,13 @@ export default function Landing() {
       <main className="flex-1 relative z-10 flex flex-col items-center justify-center pt-20 pb-32 px-6">
 
         {/* The "Status Page" Shade */}
-        <div className="mb-8 animate-fade-in-up hover:scale-105 transition-transform duration-300 cursor-help" title="Seriously, cloud tools are down all the time.">
-          <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full border border-red-900/50 bg-red-950/30 backdrop-blur-sm shadow-[0_0_20px_rgba(220,38,38,0.2)]">
+        <div className="mb-8 animate-fade-in-up hover:scale-105 transition-transform duration-300 cursor-help" title="It just works.">
+          <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full border border-green-900/50 bg-green-950/30 backdrop-blur-sm shadow-[0_0_20px_rgba(34,197,94,0.25)]">
             <div className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
             </div>
-            <span className="text-xs font-mono text-red-200">
+            <span className="text-xs font-mono text-green-200">
               <span className="font-bold text-white">Localhost is offline-first.</span>
             </span>
           </div>
