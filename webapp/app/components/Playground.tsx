@@ -10,8 +10,8 @@ import { yapiEncode, yapiDecode } from "../_lib/yapi-encode";
 import dynamic from "next/dynamic";
 const Editor = dynamic(() => import("./Editor"), { ssr: false });
 
-const DEFAULT_YAML = `url: https://jsonplaceholder.typicode.com/posts
-yapi: v1
+const DEFAULT_YAML = `yapi: v1
+url: https://jsonplaceholder.typicode.com/posts
 method: POST
 content_type: application/json
 query:

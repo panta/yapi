@@ -24,6 +24,17 @@ const (
 	SeverityError
 )
 
+func (s Severity) String() string {
+	switch s {
+	case SeverityError:
+		return "error"
+	case SeverityWarning:
+		return "warning"
+	default:
+		return "info"
+	}
+}
+
 type Issue struct {
 	Severity Severity
 	Field    string // e.g. "url", "method", "service"

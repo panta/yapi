@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -61,6 +63,7 @@ func main() {
 	rootCmd.AddCommand(newHistoryCmd())
 	rootCmd.AddCommand(newLSPCmd())
 	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newValidateCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -311,6 +314,171 @@ func newVersionCmd() *cobra.Command {
 			fmt.Printf("  commit: %s\n", commit)
 			fmt.Printf("  built:  %s\n", date)
 		},
+	}
+}
+
+// validateOutput is the JSON output structure for the validate command
+type validateOutput struct {
+	Valid       bool                 `json:"valid"`
+	Diagnostics []validateDiagnostic `json:"diagnostics"`
+	Warnings    []string             `json:"warnings"`
+}
+
+type validateDiagnostic struct {
+	Severity string `json:"severity"`
+	Field    string `json:"field,omitempty"`
+	Message  string `json:"message"`
+	Line     int    `json:"line"`
+	Col      int    `json:"col"`
+}
+
+func severityString(s validation.Severity) string {
+	switch s {
+	case validation.SeverityError:
+		return "error"
+	case validation.SeverityWarning:
+		return "warning"
+	default:
+		return "info"
+	}
+}
+
+func newValidateCmd() *cobra.Command {
+	var jsonOutput bool
+
+	cmd := &cobra.Command{
+		Use:   "validate [file]",
+		Short: "Validate a yapi config file",
+		Long:  "Validate a yapi config file and report diagnostics. Use - to read from stdin.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			var text string
+			var err error
+
+			if len(args) == 0 || args[0] == "-" {
+				// Read from stdin
+				data, readErr := io.ReadAll(os.Stdin)
+				if readErr != nil {
+					if jsonOutput {
+						outputValidateError(readErr)
+					} else {
+						log.Fatalf("Failed to read stdin: %v", readErr)
+					}
+					return
+				}
+				text = string(data)
+			} else {
+				// Read from file
+				data, readErr := os.ReadFile(args[0])
+				if readErr != nil {
+					if jsonOutput {
+						outputValidateError(readErr)
+					} else {
+						log.Fatalf("Failed to read file: %v", readErr)
+					}
+					return
+				}
+				text = string(data)
+			}
+
+			analysis, err := validation.AnalyzeConfigString(text)
+			if err != nil {
+				if jsonOutput {
+					outputValidateError(err)
+				} else {
+					log.Fatalf("Validation failed: %v", err)
+				}
+				return
+			}
+
+			if jsonOutput {
+				outputValidateJSON(analysis)
+			} else {
+				outputValidateText(analysis)
+			}
+		},
+	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output diagnostics as JSON")
+
+	return cmd
+}
+
+func outputValidateError(err error) {
+	out := validateOutput{
+		Valid: false,
+		Diagnostics: []validateDiagnostic{{
+			Severity: "error",
+			Message:  err.Error(),
+			Line:     0,
+			Col:      0,
+		}},
+		Warnings: []string{},
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func outputValidateJSON(analysis *validation.Analysis) {
+	diags := make([]validateDiagnostic, 0, len(analysis.Diagnostics))
+	hasErrors := false
+
+	for _, d := range analysis.Diagnostics {
+		if d.Severity == validation.SeverityError {
+			hasErrors = true
+		}
+		diags = append(diags, validateDiagnostic{
+			Severity: severityString(d.Severity),
+			Field:    d.Field,
+			Message:  d.Message,
+			Line:     d.Line,
+			Col:      d.Col,
+		})
+	}
+
+	warnings := analysis.Warnings
+	if warnings == nil {
+		warnings = []string{}
+	}
+
+	out := validateOutput{
+		Valid:       !hasErrors,
+		Diagnostics: diags,
+		Warnings:    warnings,
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func outputValidateText(analysis *validation.Analysis) {
+	hasOutput := false
+
+	for _, w := range analysis.Warnings {
+		fmt.Printf("\033[33m[WARN] %s\033[0m\n", w)
+		hasOutput = true
+	}
+
+	for _, d := range analysis.Diagnostics {
+		color, prefix := "\033[36m", "[INFO]"
+		if d.Severity == validation.SeverityWarning {
+			color, prefix = "\033[33m", "[WARN]"
+		}
+		if d.Severity == validation.SeverityError {
+			color, prefix = "\033[31m", "[ERROR]"
+		}
+
+		lineInfo := ""
+		if d.Line >= 0 {
+			lineInfo = fmt.Sprintf(" (line %d)", d.Line+1)
+		}
+		fmt.Printf("%s%s%s %s\033[0m\n", color, prefix, lineInfo, d.Message)
+		hasOutput = true
+	}
+
+	if !hasOutput {
+		fmt.Println("\033[32mValid\033[0m")
+	}
+
+	if analysis.HasErrors() {
+		os.Exit(1)
 	}
 }
 
