@@ -1,7 +1,10 @@
 .PHONY: build run test fmt fmt-check clean install docker web web-run
 
 NAME := yapi
-
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
 install: build
 	@echo "Installing yapi to $$(go env GOPATH)/bin..."
@@ -15,7 +18,7 @@ lint:
 
 build:
 	@echo "Building yapi CLI..."
-	@go build -o ./bin/yapi ./cmd/yapi
+	@go build -ldflags "$(LDFLAGS)" -o ./bin/yapi ./cmd/yapi
 	@codesign --sign - --force ./bin/yapi 2>/dev/null || true
 
 run:

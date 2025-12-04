@@ -19,6 +19,13 @@ import (
 	"yapi.run/cli/internal/validation"
 )
 
+// Set via ldflags at build time
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 // ANSI color codes (matching theme orange accent #ff9e64)
 const (
 	colorOrange = "\033[38;2;255;158;100m"
@@ -53,6 +60,7 @@ func main() {
 	rootCmd.AddCommand(app.newWatchCmd())
 	rootCmd.AddCommand(newHistoryCmd())
 	rootCmd.AddCommand(newLSPCmd())
+	rootCmd.AddCommand(newVersionCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -290,6 +298,18 @@ func newLSPCmd() *cobra.Command {
 		Short: "Run the yapi language server over stdio",
 		Run: func(cmd *cobra.Command, args []string) {
 			langserver.Run()
+		},
+	}
+}
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("yapi %s\n", version)
+			fmt.Printf("  commit: %s\n", commit)
+			fmt.Printf("  built:  %s\n", date)
 		},
 	}
 }
