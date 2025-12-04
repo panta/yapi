@@ -2,10 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as monaco from "monaco-editor";
-import { configureMonacoYaml } from "monaco-yaml";
-
-// Simple guard so we only wire YAML services once
-let yamlConfigured = false;
+import type { ValidateResponse, Diagnostic } from "../types/api-contract";
 
 interface EditorProps {
   value: string;
@@ -32,30 +29,92 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     hasErrorsRef.current = hasErrors;
   }, [hasErrors]);
 
-  // Simple validation: check Monaco's markers
-  const checkValidation = useCallback(() => {
-    const model = editorRef.current?.getModel();
-    if (!model) {
-      setHasErrors(false);
-      setErrorMessage("");
-      return;
-    }
+  // Ref for debounce timer
+  const validateTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Get Monaco's validation markers
-    const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-    const problems = markers.filter(
-      m => m.severity === monaco.MarkerSeverity.Error ||
-           m.severity === monaco.MarkerSeverity.Warning
-    );
+  // Convert API diagnostic to Monaco marker
+  const diagnosticToMarker = useCallback((d: Diagnostic, model: monaco.editor.ITextModel): monaco.editor.IMarkerData => {
+    const severity = d.severity === "error"
+      ? monaco.MarkerSeverity.Error
+      : d.severity === "warning"
+        ? monaco.MarkerSeverity.Warning
+        : monaco.MarkerSeverity.Info;
 
-    if (problems.length > 0) {
-      setHasErrors(true);
-      setErrorMessage(problems[0].message);
-    } else {
-      setHasErrors(false);
-      setErrorMessage("");
-    }
+    // Handle line -1 (unknown position) by defaulting to line 1
+    const line = d.line >= 0 ? d.line + 1 : 1;
+    const col = d.col >= 0 ? d.col + 1 : 1;
+
+    // Get the line content to determine end column
+    const lineContent = model.getLineContent(Math.min(line, model.getLineCount()));
+    const endCol = lineContent.length + 1;
+
+    return {
+      severity,
+      message: d.message,
+      startLineNumber: line,
+      startColumn: col,
+      endLineNumber: line,
+      endColumn: endCol,
+      source: "yapi",
+    };
   }, []);
+
+  // Validate via API and set markers
+  const validateContent = useCallback(async (content: string) => {
+    const model = editorRef.current?.getModel();
+    if (!model) return;
+
+    try {
+      const response = await fetch("/api/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ yaml: content }),
+      });
+
+      const result: ValidateResponse = await response.json();
+
+      // Convert diagnostics to Monaco markers
+      const markers = result.diagnostics.map(d => diagnosticToMarker(d, model));
+
+      // Add warnings as info markers
+      result.warnings.forEach((w, i) => {
+        markers.push({
+          severity: monaco.MarkerSeverity.Warning,
+          message: w,
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: model.getLineContent(1).length + 1,
+          source: "yapi",
+        });
+      });
+
+      // Set markers on the model
+      monaco.editor.setModelMarkers(model, "yapi", markers);
+
+      // Update error state
+      const errors = result.diagnostics.filter(d => d.severity === "error");
+      if (errors.length > 0) {
+        setHasErrors(true);
+        setErrorMessage(errors[0].message);
+      } else {
+        setHasErrors(false);
+        setErrorMessage("");
+      }
+    } catch (err) {
+      console.error("Validation error:", err);
+    }
+  }, [diagnosticToMarker]);
+
+  // Debounced validation
+  const debouncedValidate = useCallback((content: string) => {
+    if (validateTimerRef.current) {
+      clearTimeout(validateTimerRef.current);
+    }
+    validateTimerRef.current = setTimeout(() => {
+      validateContent(content);
+    }, 300);
+  }, [validateContent]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -113,64 +172,28 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
       tabCompletion: "on",
     });
 
-    // Configure YAML validation / completion once per app
-    if (!yamlConfigured) {
-      configureMonacoYaml(monaco, {
-        // Basic LSP-ish features
-        validate: true,
-        hover: true,
-        completion: true,
-        format: true,
-        enableSchemaRequest: true,
-
-        // Here you wire your JSON schema(s)
-        schemas: [
-          {
-            uri: "https://pond.audio/yapi/schema",
-            fileMatch: ["*"],
-          },
-        ],
-      });
-
-      yamlConfigured = true;
-    }
-
-    // Listen to content changes
+    // Listen to content changes and trigger validation
     const disposable = editorRef.current.onDidChangeModelContent(() => {
-      console.log("Content changed");
       const currentValue = editorRef.current?.getValue() || "";
       onChange(currentValue);
+      debouncedValidate(currentValue);
     });
 
-    // Listen to Monaco marker changes (validation updates)
-    const markerDisposable = monaco.editor.onDidChangeMarkers((uris) => {
-      console.log("Markers changed for URIs:", uris);
-      const model = editorRef.current?.getModel();
-      if (!model) return;
-
-      // Check if markers changed for our model
-      if (uris.some(uri => uri.toString() === model.uri.toString())) {
-        checkValidation();
-      }
-    });
+    // Run initial validation
+    debouncedValidate(value);
 
     // Add keyboard shortcut for Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux)
     editorRef.current.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
       () => {
-        // Get current value and validate
         const currentValue = editorRef.current?.getValue() || "";
         const model = editorRef.current?.getModel();
 
         if (model) {
           const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-          const problems = markers.filter(
-            m => m.severity === monaco.MarkerSeverity.Error ||
-                 m.severity === monaco.MarkerSeverity.Warning
-          );
+          const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
 
-          // Only run if no problems
-          if (problems.length === 0 && currentValue.trim()) {
+          if (errors.length === 0 && currentValue.trim()) {
             onRunRef.current();
           }
         }
@@ -181,19 +204,14 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     editorRef.current.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
       () => {
-        // Get current value and validate
         const currentValue = editorRef.current?.getValue() || "";
         const model = editorRef.current?.getModel();
 
         if (model) {
           const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-          const problems = markers.filter(
-            m => m.severity === monaco.MarkerSeverity.Error ||
-                 m.severity === monaco.MarkerSeverity.Warning
-          );
+          const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
 
-          // Only run if no problems
-          if (problems.length === 0 && currentValue.trim()) {
+          if (errors.length === 0 && currentValue.trim()) {
             onRunRef.current();
           }
         }
@@ -203,7 +221,9 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
     // Cleanup on unmount
     return () => {
       disposable.dispose();
-      markerDisposable.dispose();
+      if (validateTimerRef.current) {
+        clearTimeout(validateTimerRef.current);
+      }
       editorRef.current?.dispose();
       editorRef.current = null;
       model.dispose();
@@ -222,23 +242,18 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
   }, [value]);
 
   const handleRunClick = useCallback(() => {
-    // Check validation right before running
+    // Check validation right before running - only block on errors, not warnings
     const model = editorRef.current?.getModel();
     if (!model) return;
 
     const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-    const problems = markers.filter(
-      m => m.severity === monaco.MarkerSeverity.Error ||
-           m.severity === monaco.MarkerSeverity.Warning
-    );
+    const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
 
-    // Only run if there are no validation problems
-    if (problems.length === 0) {
+    if (errors.length === 0) {
       onRun();
     } else {
-      // Update error state to show the user why it didn't run
       setHasErrors(true);
-      setErrorMessage(problems[0].message);
+      setErrorMessage(errors[0].message);
     }
   }, [onRun]);
 
@@ -258,16 +273,8 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
           </div>
 
           {hasErrors && (
-            <div className="group relative flex items-center gap-2 text-xs text-yapi-error bg-yapi-error/10 border border-yapi-error/20 px-3 py-1.5 rounded-lg backdrop-blur-sm animate-shake">
-              <span className="text-sm">⚠</span>
-              <span className="font-medium max-w-xs truncate">{errorMessage}</span>
-
-              {/* Tooltip on hover */}
-              <div className="absolute left-0 top-full mt-2 hidden group-hover:block z-50">
-                <div className="bg-yapi-bg-elevated border border-yapi-error/30 rounded-lg px-3 py-2 shadow-xl max-w-md">
-                  <p className="text-xs text-yapi-fg whitespace-pre-wrap">{errorMessage}</p>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 text-xs text-yapi-error bg-yapi-error/10 border border-yapi-error/20 px-3 py-1.5 rounded-lg backdrop-blur-sm" title={errorMessage}>
+              <span className="font-medium">{errorMessage}</span>
             </div>
           )}
         </div>
@@ -293,9 +300,8 @@ export default function Editor({ value, onChange, onRun }: EditorProps) {
         </button>
       </div>
 
-      {/* Monaco Editor Container with subtle inner glow */}
-      <div className="relative flex-1 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-yapi-accent/5 via-transparent to-transparent pointer-events-none h-32"></div>
+      {/* Monaco Editor Container */}
+      <div className="relative flex-1">
         <div ref={containerRef} className="h-full" />
       </div>
 
