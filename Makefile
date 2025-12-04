@@ -1,4 +1,4 @@
-.PHONY: build run test fmt fmt-check clean install docker web web-run
+.PHONY: build run test fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -51,3 +51,35 @@ web-run:
 	-docker stop yapi
 	-docker rm yapi
 	docker run --name yapi -p 3000:3000 ${NAME}:latest
+
+# Get current version, defaulting to v0.0.0 if no tags exist
+CURRENT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+MAJOR := $(shell echo $(CURRENT_TAG) | sed 's/v//' | cut -d. -f1)
+MINOR := $(shell echo $(CURRENT_TAG) | sed 's/v//' | cut -d. -f2)
+PATCH := $(shell echo $(CURRENT_TAG) | sed 's/v//' | cut -d. -f3)
+
+bump-patch:
+	@echo "Current version: $(CURRENT_TAG)"
+	@NEW_VERSION="v$(MAJOR).$(MINOR).$$(($(PATCH)+1))"; \
+	echo "New version: $$NEW_VERSION"; \
+	git tag "$$NEW_VERSION"; \
+	echo "Tagged $$NEW_VERSION (run 'make release' to push)"
+
+bump-minor:
+	@echo "Current version: $(CURRENT_TAG)"
+	@NEW_VERSION="v$(MAJOR).$$(($(MINOR)+1)).0"; \
+	echo "New version: $$NEW_VERSION"; \
+	git tag "$$NEW_VERSION"; \
+	echo "Tagged $$NEW_VERSION (run 'make release' to push)"
+
+bump-major:
+	@echo "Current version: $(CURRENT_TAG)"
+	@NEW_VERSION="v$$(($(MAJOR)+1)).0.0"; \
+	echo "New version: $$NEW_VERSION"; \
+	git tag "$$NEW_VERSION"; \
+	echo "Tagged $$NEW_VERSION (run 'make release' to push)"
+
+release:
+	@TAG=$$(git describe --tags --abbrev=0); \
+	echo "Pushing $$TAG to origin..."; \
+	git push origin "$$TAG"
