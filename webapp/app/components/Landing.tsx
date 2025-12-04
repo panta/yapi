@@ -71,26 +71,25 @@ export default function Landing() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </div>
             <span className="text-xs font-mono text-red-200">
-              <span className="line-through opacity-50">Localhost is down</span>
-              <span className="ml-2 font-bold text-white">Localhost is offline-first.</span>
+              <span className="font-bold text-white">Localhost is offline-first.</span>
             </span>
           </div>
         </div>
 
         <div className="max-w-5xl w-full text-center space-y-8">
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
-            Why do you need a login <br className="hidden md:block" />
+            Build APIs, <br className="hidden md:block" />
             <span className="relative inline-block">
               <span className="absolute -inset-1 bg-yapi-accent/20 blur-xl opacity-50"></span>
               <span className="relative bg-gradient-to-r from-yapi-accent via-orange-300 to-yapi-accent bg-clip-text text-transparent bg-[length:200%_auto] animate-shine">
-                to test localhost?
+                Not Login Forms.
               </span>
             </span>
           </h1>
 
           <p className="text-xl text-yapi-fg-muted max-w-2xl mx-auto leading-relaxed">
-            Your dev loop, unchained. <br/>
-            <strong>yapi</strong> is the Go-powered, git-backed API client that makes you wonder how you ever shipped code without it.
+            The transformative, git-native way to build APIs. <br/>
+            <strong>yapi</strong> is an offline-first client that will change your workflow.
           </p>
 
           <div className="flex flex-col items-center gap-4 pt-8">
@@ -234,6 +233,27 @@ export default function Landing() {
             title="LSP Integration"
             desc="Autocomplete, validation, and jump-to-definition in VS Code, Neovim, or whatever you use."
           />
+          <div className="md:col-span-3">
+            <FeatureCard
+                icon="⛓️"
+                title="Coming Soon: Request Chaining"
+                desc="Define multi-step workflows in one YAML file. Pass outputs from one request (like auth tokens) as inputs to the next. Integration testing has never been this easy."
+                code={`
+yapi: v1
+chain:
+  - name: login
+    url: https://api.acme.com/auth
+    body:
+      email:    \${EMAIL}
+      password: \${PASSWORD}
+
+  - name: get_profile
+    url: https://api.acme.com/me
+    headers:
+      Authorization: Bearer \${login.access_token}
+                `.trim()}
+            />
+          </div>
         </div>
 
       </main>
@@ -250,7 +270,7 @@ export default function Landing() {
         </div>
       </footer>
 
-      <style jsx global>{`
+      <style jsx global>{\`
         @keyframes shine {
           to {
             background-position: 200% center;
@@ -265,21 +285,65 @@ export default function Landing() {
         .perspective-1000 {
           perspective: 1000px;
         }
-      `}</style>
+      \`}</style>
     </div>
   );
 }
 
-function FeatureCard({ icon, title, desc }: { icon: string, title: string, desc: string }) {
+function FeatureCard({ icon, title, desc, code }: { icon: string, title: string, desc: string, code?: string }) {
   return (
-    <div className="group p-8 rounded-2xl bg-yapi-bg-elevated/50 border border-yapi-border backdrop-blur-sm hover:border-yapi-accent/30 hover:bg-yapi-bg-elevated/80 transition-all duration-300 hover:-translate-y-2">
-      <div className="h-12 w-12 rounded-lg bg-yapi-bg-subtle flex items-center justify-center mb-6 text-2xl shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
-        {icon}
+    <div className="group p-8 rounded-2xl bg-yapi-bg-elevated/50 border border-yapi-border backdrop-blur-sm hover:border-yapi-accent/30 hover:bg-yapi-bg-elevated/80 transition-all duration-300 hover:-translate-y-1 flex flex-col">
+      <div className="flex-shrink-0">
+        <div className="h-12 w-12 rounded-lg bg-yapi-bg-subtle flex items-center justify-center mb-6 text-2xl shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
+          {icon}
+        </div>
+        <h3 className="text-xl font-bold mb-3 font-mono group-hover:text-yapi-accent transition-colors">{title}</h3>
+        <p className="text-yapi-fg-muted leading-relaxed text-sm">
+          {desc}
+        </p>
       </div>
-      <h3 className="text-xl font-bold mb-3 font-mono group-hover:text-yapi-accent transition-colors">{title}</h3>
-      <p className="text-yapi-fg-muted leading-relaxed text-sm">
-        {desc}
-      </p>
+      {code && (
+        <div className="mt-6 flex-grow flex flex-col">
+          <YamlCode code={code} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function YamlCode({ code }: { code: string }) {
+  const highlight = (line: string) => {
+    // Highlight keys (e.g., "url:")
+    line = line.replace(/^(\s*[- ]*\s*)([a-zA-Z0-9_]+)(:)/g, '$1<span class="text-yapi-accent">$2</span>$3');
+    // Highlight variables (e.g., ${EMAIL})
+    line = line.replace(/(\$\{.+?\})/g, '<span class="text-orange-400">$1</span>');
+    // Highlight comments
+    line = line.replace(/(#.*$)/g, '<span class="text-yapi-fg-subtle/80">$1</span>');
+    return line;
+  };
+
+  return (
+    <div className="relative bg-[#1e1e1e] border border-yapi-border/80 rounded-xl shadow-lg overflow-hidden flex-grow flex flex-col">
+      {/* Terminal Header */}
+      <div className="bg-[#2d2d2d] px-4 py-2.5 flex items-center gap-2 border-b border-white/5 flex-shrink-0">
+        <div className="flex gap-2">
+          <div className="w-3 h-3 rounded-full bg-[#ff5f56]/80"></div>
+          <div className="w-3 h-3 rounded-full bg-[#ffbd2e]/80"></div>
+          <div className="w-3 h-3 rounded-full bg-[#27c93f]/80"></div>
+        </div>
+        <div className="flex-1 text-center font-mono text-xs text-yapi-fg-muted/60 ml-[-50px]">
+          request-chain.yapi.yml
+        </div>
+      </div>
+
+      <pre className="p-4 font-mono text-xs overflow-x-auto text-white/80 flex-grow">
+        <code className="block">
+          {code.split('\n').map((line, i) => (
+            <div key={i} dangerouslySetInnerHTML={{ __html: highlight(line) || '&nbsp;' }} />
+          ))}
+          <span className="animate-pulse inline-block w-2 h-3 bg-yapi-accent ml-1 align-middle"></span>
+        </code>
+      </pre>
     </div>
   );
 }
