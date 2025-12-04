@@ -1,4 +1,4 @@
-.PHONY: build run test fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release
+.PHONY: build run test fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
