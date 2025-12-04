@@ -1,6 +1,7 @@
 # 🐑 yapi
 
 [![CLI](https://github.com/jamierpond/yapi/actions/workflows/cli.yml/badge.svg)](https://github.com/jamierpond/yapi/actions/workflows/cli.yml)
+[![Playground](https://yapi.run/badge.svg)](https://yapi.run/playground)
 
 **The API client that lives in your terminal (and your git repo).**
 
