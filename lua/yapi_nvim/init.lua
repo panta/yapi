@@ -129,11 +129,20 @@ function M.stop()
   close_term()
 end
 
+function M.toggle()
+  if term_win and vim.api.nvim_win_is_valid(term_win) then
+    close_term()
+  else
+    start_watch(vim.api.nvim_buf_get_name(0))
+  end
+end
+
 function M.setup(opts)
   opts = opts or {}
   M._opts = {
     lsp = opts.lsp ~= false,
     pretty = opts.pretty == true,  -- default false
+    watch_on_save = opts.watch_on_save == true,  -- default false
   }
 
   -- Commands
@@ -148,6 +157,17 @@ function M.setup(opts)
   vim.api.nvim_create_user_command("YapiStop", function()
     M.stop()
   end, { desc = "Close yapi terminal" })
+
+  -- Auto-start watch on save if configured
+  if M._opts.watch_on_save then
+    vim.api.nvim_create_autocmd("BufWritePost", {
+      pattern = { "*.yapi.yml", "*.yapi.yaml" },
+      callback = function()
+        M.watch()
+      end,
+      desc = "Start yapi watch on save",
+    })
+  end
 
   -- Setup LSP for yapi files
   if M._opts.lsp then
