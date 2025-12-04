@@ -239,21 +239,27 @@ export default function Landing() {
                 title="Coming Soon: Request Chaining"
                 desc="Automate entire end-to-end workflows. Chain requests declaratively, passing data from one step to the next to test complex API flows as simply as writing a config file."
                 code={`
-# E2E test for a new blog post
+# E2E test: create, publish, and verify a blog post
 yapi: v1
 chain:
+  # Step 1: Create a draft post.
+  # The response body (e.g., {"id": 123}) is stored.
   - name: create_draft
     url: https://my-blog/posts
     body: { title: "Hello, Yapi!" }
 
+  # Step 2: Publish the post using the ID from the 'create_draft' step.
   - name: publish_post
     url: https://my-blog/posts/\${create_draft.id}/publish
     method: POST
 
+  # Step 3: Verify the post is now live.
   - name: verify_published
     url: https://my-blog/posts/\${create_draft.id}
     expect:
+      # Check for a 200 OK status code.
       status: 200
+      # Use jq to assert the response body has a "published" status.
       jq: .status == "published"
                 `.trim()}
             />
