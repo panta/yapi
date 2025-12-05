@@ -1,5 +1,6 @@
 # general todos
 
+- allow accessing the body inputs as variables, (for assertions, testing, etc)
 - add fuzz testing
 - add color lib to dry out code.
 - add analytics
