@@ -53,7 +53,6 @@ func init() {
 	}
 }
 
-
 type rootCommand struct {
 	urlOverride string
 	noColor     bool
@@ -228,9 +227,25 @@ func (app *rootCommand) executeRun(ctx runContext) {
 
 	// Check if this is a chain config
 	if runRes.Analysis != nil && len(runRes.Analysis.Chain) > 0 {
-		chainResult, err := app.engine.RunChain(context.Background(), runRes.Analysis.Base, runRes.Analysis.Chain, opts)
-		if err != nil {
-			app.handleError(err, ctx.strict)
+		chainResult, chainErr := app.engine.RunChain(context.Background(), runRes.Analysis.Base, runRes.Analysis.Chain, opts)
+
+		// Print results from all completed steps (even if chain failed)
+		if chainResult != nil {
+			for i, stepResult := range chainResult.Results {
+				fmt.Fprintf(os.Stderr, "\n--- Step %d: %s ---\n", i+1, chainResult.StepNames[i])
+				// Trim trailing whitespace to avoid double newlines (e.g. TCP responses with \n)
+				body := strings.TrimRight(output.Highlight(stepResult.Body, stepResult.ContentType, app.noColor), "\n\r")
+				fmt.Println(body)
+				printResultMeta(stepResult)
+				// Print expectation results for this step
+				if i < len(chainResult.ExpectationResults) {
+					printExpectationResult(chainResult.ExpectationResults[i])
+				}
+			}
+		}
+
+		if chainErr != nil {
+			app.handleError(chainErr, ctx.strict)
 			return
 		}
 
@@ -238,14 +253,6 @@ func (app *rootCommand) executeRun(ctx runContext) {
 			logHistory(ctx.path, app.urlOverride)
 		}
 
-		// Print results from all steps
-		for i, stepResult := range chainResult.Results {
-			fmt.Fprintf(os.Stderr, "\n--- Step %d: %s ---\n", i+1, chainResult.StepNames[i])
-			// Trim trailing whitespace to avoid double newlines (e.g. TCP responses with \n)
-			body := strings.TrimRight(output.Highlight(stepResult.Body, stepResult.ContentType, app.noColor), "\n\r")
-			fmt.Println(body)
-			printResultMeta(stepResult)
-		}
 		fmt.Fprintln(os.Stderr, "\nChain completed successfully.")
 		app.printWarnings(runRes.Analysis, ctx.strict)
 		return
@@ -481,36 +488,40 @@ func (app *rootCommand) runConfigPath(path string) {
 	app.executeRun(runContext{path: path, strict: true})
 }
 
-
 // printExpectationResult prints expectation results to stderr
 func printExpectationResult(res *runner.ExpectationResult) {
 	if res.AssertionsTotal == 0 && !res.StatusChecked {
 		return
 	}
 
-	var parts []string
+	fmt.Fprintln(os.Stderr)
 
 	// Status check result
 	if res.StatusChecked {
 		if res.StatusPassed {
-			parts = append(parts, color.Green("status: pass"))
+			fmt.Fprintf(os.Stderr, "%s %s\n", color.Green("[PASS]"), "status check")
 		} else {
-			parts = append(parts, color.Red("status: fail"))
+			fmt.Fprintf(os.Stderr, "%s %s\n", color.Red("[FAIL]"), "status check")
 		}
 	}
 
-	// Assertions result
+	// Print each assertion result
+	for _, ar := range res.AssertionResults {
+		if ar.Passed {
+			fmt.Fprintf(os.Stderr, "%s %s\n", color.Green("[PASS]"), ar.Expression)
+		} else {
+			fmt.Fprintf(os.Stderr, "%s %s\n", color.Red("[FAIL]"), ar.Expression)
+		}
+	}
+
+	// Summary line
 	if res.AssertionsTotal > 0 {
-		assertMsg := fmt.Sprintf("assertions: %d/%d passed", res.AssertionsPassed, res.AssertionsTotal)
+		summary := fmt.Sprintf("assertions: %d/%d passed", res.AssertionsPassed, res.AssertionsTotal)
 		if res.AllPassed() {
-			parts = append(parts, color.Green(assertMsg))
+			fmt.Fprintf(os.Stderr, "\n%s\n", color.Green(summary))
 		} else {
-			parts = append(parts, color.Red(assertMsg))
+			fmt.Fprintf(os.Stderr, "\n%s\n", color.Red(summary))
 		}
-	}
-
-	if len(parts) > 0 {
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(parts, ", "))
 	}
 }
 
