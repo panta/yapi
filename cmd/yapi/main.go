@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -27,6 +28,29 @@ var (
 	commit  = "unknown"
 	date    = "unknown"
 )
+
+func init() {
+	if version != "dev" {
+		return
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		version = info.Main.Version
+	}
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			if len(s.Value) >= 7 {
+				commit = s.Value[:7]
+			}
+		case "vcs.time":
+			date = s.Value
+		}
+	}
+}
 
 // ANSI color codes (matching theme orange accent #ff9e64)
 const (
