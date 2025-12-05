@@ -16,6 +16,9 @@ type Envelope struct {
 type ParseResult struct {
 	Request  *domain.Request
 	Warnings []string
+	Chain    []ChainStep // Chain steps if this is a chain config
+	Base     *ConfigV1   // Base config for chain merging
+	Expect   Expectation // Expectations for single request validation
 }
 
 func Load(path string) (*ParseResult, error) {
@@ -55,10 +58,15 @@ func parseV1(data []byte) (*ParseResult, error) {
 		return nil, err
 	}
 
+	// Check if this is a chain config
+	if len(v1.Chain) > 0 {
+		return &ParseResult{Chain: v1.Chain, Base: &v1}, nil
+	}
+
 	domainReq, err := v1.ToDomain()
 	if err != nil {
 		return nil, err
 	}
 
-	return &ParseResult{Request: domainReq}, nil
+	return &ParseResult{Request: domainReq, Expect: v1.Expect, Base: &v1}, nil
 }

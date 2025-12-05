@@ -1,6 +1,7 @@
 package langserver
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/tliron/commonlog"
@@ -8,9 +9,11 @@ import (
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/tliron/glsp/server"
+	"yapi.run/cli/internal/compiler"
 	"yapi.run/cli/internal/constants"
 	"yapi.run/cli/internal/utils"
 	"yapi.run/cli/internal/validation"
+	"yapi.run/cli/internal/vars"
 )
 
 const lsName = "yapi language server"
@@ -39,6 +42,7 @@ func Run() {
 		TextDocumentDidClose:   textDocumentDidClose,
 		TextDocumentDidSave:    textDocumentDidSave,
 		TextDocumentCompletion: textDocumentCompletion,
+		TextDocumentHover:      textDocumentHover,
 	}
 
 	srv := server.NewServer(&handler, lsName, false)
@@ -60,6 +64,8 @@ func initialize(ctx *glsp.Context, params *protocol.InitializeParams) (any, erro
 	capabilities.CompletionProvider = &protocol.CompletionOptions{
 		TriggerCharacters: []string{":", " ", "\n"},
 	}
+
+	capabilities.HoverProvider = true
 
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
@@ -193,6 +199,24 @@ func validateAndNotify(ctx *glsp.Context, uri protocol.DocumentUri, text string)
 		})
 	}
 
+	// Compiler parity check - run the compiler with mock resolver for additional validation
+	// Skip for chain configs (they require different handling)
+	if analysis.Request != nil && len(analysis.Chain) == 0 && !analysis.HasErrors() {
+		var resolver vars.Resolver = MockResolver
+		compiled := compiler.Compile(analysis.Base, resolver)
+		for _, err := range compiled.Errors {
+			diagnostics = append(diagnostics, protocol.Diagnostic{
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 0, Character: 0},
+					End:   protocol.Position{Line: 0, Character: 100},
+				},
+				Severity: ptr(protocol.DiagnosticSeverityError),
+				Source:   ptr("yapi-compiler"),
+				Message:  err.Error(),
+			})
+		}
+	}
+
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
@@ -218,6 +242,23 @@ func severityToProtocol(s validation.Severity) protocol.DiagnosticSeverity {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// MockResolver provides placeholder values for variable interpolation in LSP validation.
+// This allows the compiler to validate the config structure even without real env vars.
+func MockResolver(key string) (string, error) {
+	keyLower := strings.ToLower(key)
+	if strings.Contains(keyLower, "port") {
+		return "8080", nil
+	}
+	if strings.Contains(keyLower, "host") {
+		return "localhost", nil
+	}
+	if strings.Contains(keyLower, "url") {
+		return "http://localhost:8080", nil
+	}
+	// Return a placeholder for anything else - don't fail
+	return "PLACEHOLDER", nil
 }
 
 // valDesc represents a value with its description for completions
@@ -364,4 +405,44 @@ func textDocumentCompletion(ctx *glsp.Context, params *protocol.CompletionParams
 	}
 
 	return items, nil
+}
+
+func textDocumentHover(ctx *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
+	uri := params.TextDocument.URI
+	doc, ok := docs[uri]
+	if !ok {
+		return nil, nil
+	}
+
+	line := int(params.Position.Line)
+	char := int(params.Position.Character)
+
+	// Find all env var references in the document
+	refs := validation.FindEnvVarRefs(doc.Text)
+
+	// Check if cursor is within any env var reference
+	for _, ref := range refs {
+		if ref.Line == line && char >= ref.Col && char <= ref.EndIndex {
+			var content string
+			if ref.IsDefined {
+				redacted := validation.RedactValue(ref.Value)
+				content = fmt.Sprintf("**Environment Variable: `%s`**\n\nValue: `%s`", ref.Name, redacted)
+			} else {
+				content = fmt.Sprintf("**Environment Variable: `%s`**\n\n_Not defined_", ref.Name)
+			}
+
+			return &protocol.Hover{
+				Contents: protocol.MarkupContent{
+					Kind:  protocol.MarkupKindMarkdown,
+					Value: content,
+				},
+				Range: &protocol.Range{
+					Start: protocol.Position{Line: protocol.UInteger(line), Character: protocol.UInteger(ref.Col)},
+					End:   protocol.Position{Line: protocol.UInteger(line), Character: protocol.UInteger(ref.EndIndex)},
+				},
+			}, nil
+		}
+	}
+
+	return nil, nil
 }

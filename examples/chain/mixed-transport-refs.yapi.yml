@@ -1,0 +1,34 @@
+yapi: v1
+
+# Mixed transport chain: HTTP -> TCP -> gRPC -> HTTP
+# Demonstrates variable references across all transport types
+
+chain:
+  - name: get_todo
+    url: https://jsonplaceholder.typicode.com/todos/1
+    method: GET
+
+  - name: tcp_echo
+    url: tcp://tcpbin.com:4242
+    data: "Todo: ${get_todo.title}\n"
+    encoding: text
+    read_timeout: 5
+    close_after_send: true
+
+  - name: grpc_hello
+    url: grpc://grpcb.in:9000
+    service: hello.HelloService
+    rpc: SayHello
+    plaintext: true
+    body:
+      greeting: $get_todo.title
+
+  - name: create_post
+    url: https://jsonplaceholder.typicode.com/posts
+    method: POST
+    headers:
+      Content-Type: application/json
+    body:
+      original_todo: $get_todo.title
+      grpc_reply: $grpc_hello.reply
+      userId: $get_todo.userId

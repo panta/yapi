@@ -12,6 +12,7 @@ import (
 
 	"yapi.run/cli/internal/constants"
 	"yapi.run/cli/internal/domain"
+	"yapi.run/cli/internal/utils"
 )
 
 // knownV1Keys is the set of valid keys for v1 config files.
@@ -40,6 +41,44 @@ var knownV1Keys = map[string]bool{
 	"read_timeout":     true,
 	"idle_timeout":     true,
 	"close_after_send": true,
+	"chain":            true,
+	"expect":           true,
+}
+
+// knownChainStepKeys is the set of valid keys for chain step entries.
+// Chain steps can use any ConfigV1 field plus "name".
+var knownChainStepKeys = map[string]bool{
+	"name": true,
+	// Include all ConfigV1 keys except "yapi" and "chain"
+	"url":              true,
+	"path":             true,
+	"method":           true,
+	"content_type":     true,
+	"headers":          true,
+	"body":             true,
+	"json":             true,
+	"query":            true,
+	"graphql":          true,
+	"variables":        true,
+	"service":          true,
+	"rpc":              true,
+	"proto":            true,
+	"proto_path":       true,
+	"data":             true,
+	"encoding":         true,
+	"jq_filter":        true,
+	"insecure":         true,
+	"plaintext":        true,
+	"read_timeout":     true,
+	"idle_timeout":     true,
+	"close_after_send": true,
+	"expect":           true,
+}
+
+// knownExpectKeys is the set of valid keys for expect blocks.
+var knownExpectKeys = map[string]bool{
+	"status": true,
+	"assert": true,
 }
 
 // FindUnknownKeys checks a raw map for keys not in knownV1Keys.
@@ -80,6 +119,82 @@ type ConfigV1 struct {
 	ReadTimeout    int                    `yaml:"read_timeout,omitempty"` // TCP read timeout in seconds
 	IdleTimeout    int                    `yaml:"idle_timeout,omitempty"` // TCP idle timeout in milliseconds (default 500)
 	CloseAfterSend bool                   `yaml:"close_after_send,omitempty"`
+
+	// Expect defines assertions to run after the request
+	Expect Expectation `yaml:"expect,omitempty"`
+
+	// Chain allows executing multiple dependent requests
+	Chain []ChainStep `yaml:"chain,omitempty"`
+}
+
+// ChainStep represents a single step in a request chain.
+// It embeds ConfigV1 so all config fields are available as overrides.
+type ChainStep struct {
+	Name     string           `yaml:"name"` // Required: unique step identifier
+	ConfigV1 `yaml:",inline"` // All ConfigV1 fields available as overrides
+}
+
+// Merge creates a full ConfigV1 by applying step overrides to the base config.
+// Maps are deep copied to avoid polluting the shared base config between steps.
+func (base *ConfigV1) Merge(step ChainStep) ConfigV1 {
+	m := *base
+	m.Chain = nil
+	m.Expect = step.Expect
+
+	// Scalar overrides using Coalesce
+	m.URL = utils.Coalesce(step.URL, base.URL)
+	m.Path = utils.Coalesce(step.Path, base.Path)
+	m.Method = utils.Coalesce(step.Method, base.Method)
+	m.ContentType = utils.Coalesce(step.ContentType, base.ContentType)
+	m.JSON = utils.Coalesce(step.JSON, base.JSON)
+	m.Graphql = utils.Coalesce(step.Graphql, base.Graphql)
+	m.Service = utils.Coalesce(step.Service, base.Service)
+	m.RPC = utils.Coalesce(step.RPC, base.RPC)
+	m.Proto = utils.Coalesce(step.Proto, base.Proto)
+	m.ProtoPath = utils.Coalesce(step.ProtoPath, base.ProtoPath)
+	m.Data = utils.Coalesce(step.Data, base.Data)
+	m.Encoding = utils.Coalesce(step.Encoding, base.Encoding)
+	m.JQFilter = utils.Coalesce(step.JQFilter, base.JQFilter)
+
+	// Bool/Int overrides
+	if step.Insecure {
+		m.Insecure = true
+	}
+	if step.Plaintext {
+		m.Plaintext = true
+	}
+	if step.CloseAfterSend {
+		m.CloseAfterSend = true
+	}
+	if step.ReadTimeout != 0 {
+		m.ReadTimeout = step.ReadTimeout
+	}
+	if step.IdleTimeout != 0 {
+		m.IdleTimeout = step.IdleTimeout
+	}
+
+	// Generic map merging
+	m.Headers = utils.MergeMaps(base.Headers, step.Headers)
+	m.Query = utils.MergeMaps(base.Query, step.Query)
+
+	// Deep clone Body/Variables from base, then override if step has values
+	m.Body = utils.DeepCloneMap(base.Body)
+	if step.Body != nil {
+		m.Body = step.Body
+	}
+
+	m.Variables = utils.DeepCloneMap(base.Variables)
+	if step.Variables != nil {
+		m.Variables = step.Variables
+	}
+
+	return m
+}
+
+// Expectation defines assertions for a chain step
+type Expectation struct {
+	Status interface{} `yaml:"status,omitempty"` // int or []int
+	Assert []string    `yaml:"assert,omitempty"` // JQ expressions that must evaluate to true
 }
 
 // ToDomain converts V1 YAML to the Canonical Config
