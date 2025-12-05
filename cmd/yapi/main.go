@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"yapi.run/cli/internal/cli/color"
 	"yapi.run/cli/internal/core"
 	"yapi.run/cli/internal/langserver"
 	"yapi.run/cli/internal/output"
@@ -52,12 +53,6 @@ func init() {
 	}
 }
 
-// ANSI color codes (matching theme orange accent #ff9e64)
-const (
-	colorOrange = "\033[38;2;255;158;100m"
-	colorReset  = "\033[0m"
-	colorDim    = "\033[2m"
-)
 
 type rootCommand struct {
 	urlOverride string
@@ -76,7 +71,10 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "yapi",
 		Short: "yapi is a unified API client for HTTP, gRPC, and TCP",
-		Run:   app.runInteractive,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			color.SetNoColor(app.noColor)
+		},
+		Run: app.runInteractive,
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&app.urlOverride, "url", "u", "", "Override the URL specified in the config file")
@@ -194,9 +192,9 @@ func clearScreen() {
 }
 
 func printWatchHeader(path string) {
-	fmt.Printf("%s🐑 yapi watch%s\n\n", colorOrange, colorReset)
-	fmt.Printf("%s[watching %s]%s\n", colorDim, filepath.Base(path), colorReset)
-	fmt.Printf("%s[%s]%s\n\n", colorDim, time.Now().Format("15:04:05"), colorReset)
+	fmt.Printf("%s\n\n", color.Accent("yapi watch"))
+	fmt.Printf("%s\n", color.Dim("[watching "+filepath.Base(path)+"]"))
+	fmt.Printf("%s\n\n", color.Dim("["+time.Now().Format("15:04:05")+"]"))
 }
 
 // runContext holds options for executeRun
@@ -290,7 +288,24 @@ func (app *rootCommand) handleError(err error, strict bool) {
 	if strict {
 		log.Fatalf("%v", err)
 	} else {
-		fmt.Printf("\033[31m%v\033[0m\n", err)
+		fmt.Println(color.Red(err.Error()))
+	}
+}
+
+// formatDiagnostic formats a single diagnostic with color.
+func formatDiagnostic(d validation.Diagnostic) string {
+	lineInfo := ""
+	if d.Line >= 0 {
+		lineInfo = fmt.Sprintf(" (line %d)", d.Line+1)
+	}
+
+	switch d.Severity {
+	case validation.SeverityError:
+		return color.Red("[ERROR]" + lineInfo + " " + d.Message)
+	case validation.SeverityWarning:
+		return color.Yellow("[WARN]" + lineInfo + " " + d.Message)
+	default:
+		return color.Cyan("[INFO]" + lineInfo + " " + d.Message)
 	}
 }
 
@@ -313,19 +328,7 @@ func (app *rootCommand) printDiagnostics(
 		if !filter(d) {
 			continue
 		}
-		color, prefix := "\033[36m", "[INFO]"
-		if d.Severity == validation.SeverityWarning {
-			color, prefix = "\033[33m", "[WARN]"
-		}
-		if d.Severity == validation.SeverityError {
-			color, prefix = "\033[31m", "[ERROR]"
-		}
-
-		lineInfo := ""
-		if d.Line >= 0 {
-			lineInfo = fmt.Sprintf(" (line %d)", d.Line+1)
-		}
-		fmt.Fprintf(out, "%s%s%s %s\033[0m\n", color, prefix, lineInfo, d.Message)
+		fmt.Fprintln(out, formatDiagnostic(d))
 	}
 }
 
@@ -346,7 +349,7 @@ func (app *rootCommand) printWarnings(a *validation.Analysis, strict bool) {
 	}
 
 	for _, w := range a.Warnings {
-		fmt.Fprintf(out, "\033[33m[WARN] %s\033[0m\n", w)
+		fmt.Fprintln(out, color.Yellow("[WARN] "+w))
 	}
 
 	app.printDiagnostics(a, strict, func(d validation.Diagnostic) bool {
@@ -454,32 +457,18 @@ func outputValidateError(err error) {
 }
 
 func outputValidateText(analysis *validation.Analysis) {
-	hasOutput := false
+	hasOutput := len(analysis.Warnings) > 0 || len(analysis.Diagnostics) > 0
 
 	for _, w := range analysis.Warnings {
-		fmt.Printf("\033[33m[WARN] %s\033[0m\n", w)
-		hasOutput = true
+		fmt.Println(color.Yellow("[WARN] " + w))
 	}
 
 	for _, d := range analysis.Diagnostics {
-		color, prefix := "\033[36m", "[INFO]"
-		if d.Severity == validation.SeverityWarning {
-			color, prefix = "\033[33m", "[WARN]"
-		}
-		if d.Severity == validation.SeverityError {
-			color, prefix = "\033[31m", "[ERROR]"
-		}
-
-		lineInfo := ""
-		if d.Line >= 0 {
-			lineInfo = fmt.Sprintf(" (line %d)", d.Line+1)
-		}
-		fmt.Printf("%s%s%s %s\033[0m\n", color, prefix, lineInfo, d.Message)
-		hasOutput = true
+		fmt.Println(formatDiagnostic(d))
 	}
 
 	if !hasOutput {
-		fmt.Println("\033[32mValid\033[0m")
+		fmt.Println(color.Green("Valid"))
 	}
 
 	if analysis.HasErrors() {
@@ -492,10 +481,6 @@ func (app *rootCommand) runConfigPath(path string) {
 	app.executeRun(runContext{path: path, strict: true})
 }
 
-// dim wraps text in ANSI dim escape codes
-func dim(s string) string {
-	return "\033[2m" + s + "\033[0m"
-}
 
 // printExpectationResult prints expectation results to stderr
 func printExpectationResult(res *runner.ExpectationResult) {
@@ -503,27 +488,24 @@ func printExpectationResult(res *runner.ExpectationResult) {
 		return
 	}
 
-	colorGreen := "\033[32m"
-	colorRed := "\033[31m"
-	colorReset := "\033[0m"
-
 	var parts []string
 
 	// Status check result
 	if res.StatusChecked {
 		if res.StatusPassed {
-			parts = append(parts, fmt.Sprintf("%sstatus: pass%s", colorGreen, colorReset))
+			parts = append(parts, color.Green("status: pass"))
 		} else {
-			parts = append(parts, fmt.Sprintf("%sstatus: fail%s", colorRed, colorReset))
+			parts = append(parts, color.Red("status: fail"))
 		}
 	}
 
 	// Assertions result
 	if res.AssertionsTotal > 0 {
+		assertMsg := fmt.Sprintf("assertions: %d/%d passed", res.AssertionsPassed, res.AssertionsTotal)
 		if res.AllPassed() {
-			parts = append(parts, fmt.Sprintf("%sassertions: %d/%d passed%s", colorGreen, res.AssertionsPassed, res.AssertionsTotal, colorReset))
+			parts = append(parts, color.Green(assertMsg))
 		} else {
-			parts = append(parts, fmt.Sprintf("%sassertions: %d/%d passed%s", colorRed, res.AssertionsPassed, res.AssertionsTotal, colorReset))
+			parts = append(parts, color.Red(assertMsg))
 		}
 	}
 
@@ -535,10 +517,10 @@ func printExpectationResult(res *runner.ExpectationResult) {
 // printResultMeta prints request URL and timing to stderr
 func printResultMeta(result *runner.Result) {
 	if result.RequestURL != "" {
-		fmt.Fprintf(os.Stderr, "\n%s\n", dim("URL: "+result.RequestURL))
+		fmt.Fprintf(os.Stderr, "\n%s\n", color.Dim("URL: "+result.RequestURL))
 	}
-	fmt.Fprintf(os.Stderr, "%s\n", dim("Time: "+result.Duration.String()))
-	fmt.Fprintf(os.Stderr, "%s\n", dim(fmt.Sprintf("Size: %s (%d lines, %d chars)", formatBytes(result.BodyBytes), result.BodyLines, result.BodyChars)))
+	fmt.Fprintf(os.Stderr, "%s\n", color.Dim("Time: "+result.Duration.String()))
+	fmt.Fprintf(os.Stderr, "%s\n", color.Dim(fmt.Sprintf("Size: %s (%d lines, %d chars)", formatBytes(result.BodyBytes), result.BodyLines, result.BodyChars)))
 }
 
 func formatBytes(b int) string {
