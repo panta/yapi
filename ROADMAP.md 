@@ -1,0 +1,86 @@
+### ROADMAP.md
+
+# 🗺️ yapi Roadmap: The Standard for Git-Native API Development
+
+**Mission:** To replace heavy, cloud-forced API clients with a fast, offline-first, git-friendly CLI tool. We treat API requests as code—versionable, diff-able, and executable anywhere.
+
+---
+
+## 📅 Phase 1: The "Local-First" Wedge
+**Goal:** Make the single-player experience 10x better than Curl and faster than Postman. Focus on workflows and state.
+
+### 🔗 1. Request Chaining (The "DAG" Engine)
+Transform `yapi` from a stateless request runner into a stateful workflow engine.
+*Ref: `TODO/CHAIN.md`*
+
+
+
+- [ ] **Architecture Refactor:** Implement the "Chain of 1" model. Treat every request as a chain of length 1 internally.
+- [ ] **Dependency Graph:** Build a DAG solver to determine execution order based on variable references.
+- [ ] **Variable Syntax:** Implement `${step.format.path}` syntax (e.g., `${login.json.token}`).
+- [ ] **Pipefail Logic:** Enforce implicit assertions (if Step B needs JSON from Step A, Step A must return valid JSON).
+
+### 🛠️ 2. Editor Integration
+Leverage the existing `internal/langserver` to meet developers where they live.
+
+- [ ] **VS Code Extension:** Wrap `yapi lsp` into a native VS Code extension.
+- [ ] **CodeLens Support:** Add "▶ Run" buttons directly above request definitions in YAML files.
+- [ ] **Env Var Autocomplete:** Enhance LSP to scan local `.env` files and autocomplete `${VAR}` to make secret management seamless.
+
+---
+
+## 📅 Phase 2: The "CI/CD" Wedge
+**Goal:** Become part of the engineering infrastructure. If it lives in the repo, it should run in the pipeline.
+
+### ✅ 1. Validation Engine (`expect` blocks)
+Move beyond "eyeballing" responses to automated contract testing.
+*Ref: `TODO/VALIDATE.md`*
+
+- [ ] **Status Assertions:** Support explicit `status: 2xx` or `status: [200, 201]`.
+- [ ] **Header Matching:** Glob matching for headers (e.g., `Content-Type: application/*`).
+- [ ] **Body Assertions:**
+    - Exact Match.
+    - Partial Match (contains).
+    - JQ Assertions (`.users | length > 0`).
+- [ ] **JSON Schema:** Support validating response bodies against inline or referenced JSON Schemas.
+
+### 🤖 2. CI/CD Integration
+- [ ] **`yapi test` Command:** A dedicated mode that suppresses UI output and returns non-zero exit codes on failure.
+- [ ] **Reporters:** Output results in JUnit XML or TAP format for Jenkins/GitHub Actions integration.
+- [ ] **Bail Mode:** `--bail` flag to stop execution on the first failure in a chain.
+
+---
+
+## 📅 Phase 3: The "Viral" & Ecosystem Wedge
+**Goal:** Growth loops and friction reduction.
+
+### 🔄 1. Import/Export Strategy
+Lower the barrier to entry.
+- [ ] **`yapi import curl`:** Paste a curl command, get a valid `.yapi.yml`.
+- [ ] **`yapi import postman`:** Convert Postman collections to folder structures of yapi files.
+
+### 🏷️ 2. "Run in yapi" Badge
+- [ ] **Deep Linking:** Create a mechanism for `https://yapi.run/run?url=...` to load a config into the web playground.
+- [ ] **Badge Generator:** Provide Markdown snippets for OSS maintainers to put in their READMEs.
+
+### 🖥️ 3. Mock Server (`yapi serve`)
+Invert the definitions to create instant mock servers.
+*Ref: `TODO/_SERVE-wip-vibed.md`*
+
+
+
+[Image of API mock server architecture diagram]
+
+
+- [ ] **Request Matching:** Match incoming HTTP requests against defined `url`/`method` in yapi files.
+- [ ] **Response Generation:** Return the data defined in the `expect` or `example` blocks.
+- [ ] **Chaos Mode:** Optional flag to inject random latency or 5xx errors.
+
+---
+
+## 🎨 Quality of Life & Polish
+*Ongoing improvements throughout all phases.*
+
+- [ ] **TUI History:** Interactive history search (`yapi history`) with fuzzy filtering.
+- [ ] **TUI Syntax Highlighting:** Ensure the file selector preview has syntax coloring (currently plaintext in some modes).
+- [ ] **WebSockets:** Add `ws://` support to the Executor.
