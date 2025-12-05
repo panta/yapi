@@ -90,27 +90,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse, { status: 400 });
     }
 
-    // SSRF Protection: Validate URL in YAML
+    // SSRF Protection: Validate URL(s) in YAML
     try {
       const parsed = parse(yaml);
-      const url = parsed.url;
 
-      if (!url) {
+      // Collect all URLs to validate - either from top-level url or from chain
+      const urlsToValidate: string[] = [];
+
+      if (parsed.url) {
+        urlsToValidate.push(parsed.url);
+      }
+
+      if (Array.isArray(parsed.chain)) {
+        for (const step of parsed.chain) {
+          if (step.url) {
+            urlsToValidate.push(step.url);
+          }
+        }
+      }
+
+      if (urlsToValidate.length === 0) {
         const errorResponse = ExecuteErrorResponseSchema.parse({
           success: false,
-          error: "YAML must contain a 'url' field",
+          error: "YAML must contain a 'url' field or a 'chain' with URLs",
           errorType: "VALIDATION_ERROR",
         });
         return NextResponse.json(errorResponse, { status: 400 });
       }
 
-      if (!isSafeUrl(url)) {
-        const errorResponse = ExecuteErrorResponseSchema.parse({
-          success: false,
-          error: "Security Violation: Access to local/private networks is blocked. (I'll maybe port yapi to Go, so it can run in the browser directly so you can do this!)",
-          errorType: "SSRF_BLOCKED",
-        });
-        return NextResponse.json(errorResponse, { status: 403 });
+      // Check all URLs for SSRF
+      for (const url of urlsToValidate) {
+        if (!isSafeUrl(url)) {
+          const errorResponse = ExecuteErrorResponseSchema.parse({
+            success: false,
+            error: `Security Violation: Access to local/private networks is blocked for URL: ${url}`,
+            errorType: "SSRF_BLOCKED",
+          });
+          return NextResponse.json(errorResponse, { status: 403 });
+        }
       }
     } catch (e) {
       const errorResponse = ExecuteErrorResponseSchema.parse({
@@ -146,8 +163,29 @@ export async function POST(request: NextRequest) {
       // Try to parse as JSON
       responseBody = JSON.parse(stdout);
     } catch {
-      // If not JSON, return as raw text
-      responseBody = stdout;
+      // If not single JSON, try parsing as newline-delimited JSON (chain output)
+      const lines = stdout.trim().split('\n');
+      const jsonObjects: unknown[] = [];
+      let currentJson = '';
+
+      for (const line of lines) {
+        currentJson += line;
+        try {
+          jsonObjects.push(JSON.parse(currentJson));
+          currentJson = '';
+        } catch {
+          // Continue accumulating lines for multi-line JSON
+          currentJson += '\n';
+        }
+      }
+
+      if (jsonObjects.length > 0 && currentJson.trim() === '') {
+        // Successfully parsed as array of JSON objects
+        responseBody = jsonObjects.length === 1 ? jsonObjects[0] : jsonObjects;
+      } else {
+        // Return as raw text
+        responseBody = stdout;
+      }
     }
 
     // Build success response

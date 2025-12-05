@@ -76,13 +76,44 @@ idle_timeout: 500
 close_after_send: true
 `,
   },
+  chain: {
+    label: "Chain",
+    yaml: `yapi: v1
+
+# Mixed transport chain: HTTP -> gRPC -> HTTP
+# Demonstrates variable references across transport types
+
+chain:
+  - name: get_todo
+    url: https://jsonplaceholder.typicode.com/todos/1
+    method: GET
+
+  - name: grpc_hello
+    url: grpc://grpcb.in:9000
+    service: hello.HelloService
+    rpc: SayHello
+    plaintext: true
+    body:
+      greeting: $get_todo.title
+
+  - name: create_post
+    url: https://jsonplaceholder.typicode.com/posts
+    method: POST
+    headers:
+      Content-Type: application/json
+    body:
+      original_todo: $get_todo.title
+      grpc_reply: $grpc_hello.reply
+      userId: $get_todo.userId
+`,
+  },
 } as const;
 
 type ExampleKey = keyof typeof EXAMPLES;
 
 export default function Playground() {
   const pathname = usePathname();
-  const [yaml, setYaml] = useState<string>(EXAMPLES.http.yaml);
+  const [yaml, setYaml] = useState<string>(EXAMPLES.chain.yaml);
   const [result, setResult] = useState<ExecuteResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
