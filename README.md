@@ -215,6 +215,20 @@ yapi watch ./my-request.yapi.yml
 
 ## 🧠 Editor Integration
 
+### Language Server
+
+**yapi** ships with a full Language Server Protocol (LSP) implementation that brings IDE-level intelligence to your `.yapi.yml` files:
+
+**Real-time Validation** - Errors and warnings appear as you type, with precise line/column positions. The LSP runs the same validation as the CLI, catching issues before you execute.
+
+**Intelligent Autocompletion** - Context-aware suggestions for:
+- Top-level keys (`url`, `method`, `headers`, `body`, `query`, `graphql`, `jq_filter`, etc.)
+- HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`)
+- Encoding types (`text`, `hex`, `base64`)
+- Boolean fields (`insecure`, `plaintext`, `close_after_send`)
+
+**Hover Information** - Hover over `${VAR}` references to see environment variable status and (redacted) values.
+
 ### Neovim
 
 **yapi** was built with Neovim in mind. We have a native plugin in `lua/yapi_nvim`.
@@ -235,11 +249,14 @@ yapi watch ./my-request.yapi.yml
 
   * `:YapiRun` - Run the current buffer.
   * `:YapiWatch` - Open a split and watch the current buffer.
-  * **LSP Support:** You get autocompletion for keys (`method`, `headers`, etc.) and validation right in your editor\!
 
 ### VS Code / Others
 
-Since **yapi** includes a Language Server (`yapi lsp`), you can hook it up to any editor that supports LSP over stdio.
+The LSP runs over stdio and works with any editor that supports the protocol:
+
+```bash
+yapi lsp
+```
 
 -----
 
