@@ -1,5 +1,6 @@
 # general todos
 
+- add optional logging ?
 - add sleep for delays between requests
 - allow accessing the body inputs as variables, (for assertions, testing, etc)
 - add fuzz testing
