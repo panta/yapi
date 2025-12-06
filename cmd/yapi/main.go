@@ -8,17 +8,20 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"yapi.run/cli/internal/cli/color"
 	"yapi.run/cli/internal/core"
 	"yapi.run/cli/internal/langserver"
 	"yapi.run/cli/internal/output"
 	"yapi.run/cli/internal/runner"
+	"yapi.run/cli/internal/share"
 	"yapi.run/cli/internal/tui"
 	"yapi.run/cli/internal/validation"
 )
@@ -73,6 +76,14 @@ func main() {
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			color.SetNoColor(app.noColor)
 		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			// Log command to history (skip meta commands)
+			switch cmd.Name() {
+			case "history", "version", "lsp", "help", "yapi":
+				return
+			}
+			logHistoryCmd(reconstructCommand(cmd, args))
+		},
 		Run: app.runInteractive,
 	}
 
@@ -85,6 +96,7 @@ func main() {
 	rootCmd.AddCommand(newLSPCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newValidateCmd())
+	rootCmd.AddCommand(newShareCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -249,10 +261,6 @@ func (app *rootCommand) executeRun(ctx runContext) {
 			return
 		}
 
-		if ctx.strict {
-			logHistory(ctx.path, app.urlOverride)
-		}
-
 		fmt.Fprintln(os.Stderr, "\nChain completed successfully.")
 		app.printWarnings(runRes.Analysis, ctx.strict)
 		return
@@ -263,10 +271,6 @@ func (app *rootCommand) executeRun(ctx runContext) {
 			os.Exit(1)
 		}
 		return
-	}
-
-	if ctx.strict {
-		logHistory(ctx.path, app.urlOverride)
 	}
 
 	if runRes.Result != nil {
@@ -488,6 +492,79 @@ func (app *rootCommand) runConfigPath(path string) {
 	app.executeRun(runContext{path: path, strict: true})
 }
 
+func newShareCmd() *cobra.Command {
+	var copyToClipboard bool
+
+	cmd := &cobra.Command{
+		Use:   "share <file>",
+		Short: "Generate a shareable yapi.run link for a config file",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			filename := args[0]
+			data, err := os.ReadFile(filename)
+			if err != nil {
+				log.Fatalf("Failed to read file: %v", err)
+			}
+
+			content := string(data)
+			encoded, err := share.Encode(content)
+			if err != nil {
+				log.Fatalf("Failed to encode: %v", err)
+			}
+
+			url := "https://yapi.run/c/" + encoded
+
+			// Stats
+			originalSize := len(data)
+			compressedSize := len(encoded)
+			ratio := float64(compressedSize) / float64(originalSize) * 100
+			lines := strings.Count(content, "\n") + 1
+
+			// Fancy output to stderr
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, color.AccentBg(" 🐑 yapi share "))
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, "  "+color.Green("Your yap is ready to share!"))
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, color.Dim("  file     ")+filepath.Base(filename))
+			fmt.Fprintln(os.Stderr, color.Dim("  lines    ")+fmt.Sprintf("%d", lines))
+			fmt.Fprintln(os.Stderr, color.Dim("  size     ")+fmt.Sprintf("%s -> %s (%.0f%%)", formatBytes(originalSize), formatBytes(compressedSize), ratio))
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, "  "+color.Cyan(url))
+			fmt.Fprintln(os.Stderr)
+
+			// Copy to clipboard if requested
+			if copyToClipboard {
+				if err := copyToClip(url); err != nil {
+					fmt.Fprintln(os.Stderr, color.Dim("  clipboard failed: "+err.Error()))
+				} else {
+					fmt.Fprintln(os.Stderr, "  "+color.Green("Copied to clipboard!"))
+				}
+				fmt.Fprintln(os.Stderr)
+			}
+
+			fmt.Fprintln(os.Stderr, color.Dim("  The entire request is encoded in the URL - just share it!"))
+			fmt.Fprintln(os.Stderr, color.Dim("  Tip: pipe to clipboard with: yapi share file.yapi | pbcopy"))
+			fmt.Fprintln(os.Stderr)
+
+			// Only print raw URL to stdout when piping (not a terminal)
+			if stat, _ := os.Stdout.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+				fmt.Println(url)
+			}
+		},
+	}
+
+	cmd.Flags().BoolVarP(&copyToClipboard, "copy", "c", false, "Copy URL to clipboard")
+
+	return cmd
+}
+
+func copyToClip(text string) error {
+	cmd := exec.Command("pbcopy")
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
+}
+
 // printExpectationResult prints expectation results to stderr
 func printExpectationResult(res *runner.ExpectationResult) {
 	if res.AssertionsTotal == 0 && !res.StatusChecked {
@@ -595,8 +672,8 @@ func newHistoryCmd() *cobra.Command {
 	return cmd
 }
 
-// logHistory writes the executed command to ~/.yapi_history for shell integration
-func logHistory(configPath, urlOverride string) {
+// logHistoryCmd writes a command string to history
+func logHistoryCmd(cmdStr string) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return
@@ -609,16 +686,37 @@ func logHistory(configPath, urlOverride string) {
 	}
 	defer f.Close()
 
-	absPath, err := filepath.Abs(configPath)
-	if err != nil {
-		absPath = configPath
-	}
-
-	cmd := fmt.Sprintf("yapi run \"%s\"", absPath)
-	if urlOverride != "" {
-		cmd += fmt.Sprintf(" -u \"%s\"", urlOverride)
-	}
-
-	line := fmt.Sprintf("%d | %s\n", time.Now().Unix(), cmd)
+	line := fmt.Sprintf("%d | %s\n", time.Now().Unix(), cmdStr)
 	f.WriteString(line)
+}
+
+// reconstructCommand builds the full command string from cobra command and args
+func reconstructCommand(cmd *cobra.Command, args []string) string {
+	parts := []string{"yapi", cmd.Name()}
+
+	// Add flags that were set
+	cmd.Flags().Visit(func(f *pflag.Flag) {
+		if f.Value.Type() == "bool" {
+			parts = append(parts, "--"+f.Name)
+		} else {
+			parts = append(parts, fmt.Sprintf("--%s=%q", f.Name, f.Value.String()))
+		}
+	})
+
+	// Add args (quote paths)
+	for _, arg := range args {
+		absPath, err := filepath.Abs(arg)
+		if err == nil && fileExists(absPath) {
+			parts = append(parts, fmt.Sprintf("%q", absPath))
+		} else {
+			parts = append(parts, arg)
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

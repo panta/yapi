@@ -20,13 +20,14 @@ const (
 
 // ANSI true color escape sequences
 var (
-	accentSeq = fmt.Sprintf("\033[38;2;%d;%d;%dm", accentR, accentG, accentB)
-	greenSeq  = fmt.Sprintf("\033[38;2;%d;%d;%dm", greenR, greenG, greenB)
-	redSeq    = fmt.Sprintf("\033[38;2;%d;%d;%dm", redR, redG, redB)
-	yellowSeq = fmt.Sprintf("\033[38;2;%d;%d;%dm", yellowR, yellowG, yellowB)
-	cyanSeq   = fmt.Sprintf("\033[38;2;%d;%d;%dm", cyanR, cyanG, cyanB)
-	dimSeq    = "\033[2m"
-	resetSeq  = "\033[0m"
+	accentSeq   = fmt.Sprintf("\033[38;2;%d;%d;%dm", accentR, accentG, accentB)
+	greenSeq    = fmt.Sprintf("\033[38;2;%d;%d;%dm", greenR, greenG, greenB)
+	redSeq      = fmt.Sprintf("\033[38;2;%d;%d;%dm", redR, redG, redB)
+	yellowSeq   = fmt.Sprintf("\033[38;2;%d;%d;%dm", yellowR, yellowG, yellowB)
+	cyanSeq     = fmt.Sprintf("\033[38;2;%d;%d;%dm", cyanR, cyanG, cyanB)
+	dimSeq      = "\033[2m"
+	resetSeq    = "\033[0m"
+	accentBgSeq = fmt.Sprintf("\033[48;2;%d;%d;%dm\033[38;2;255;255;255m", accentR, accentG, accentB) // white on orange
 )
 
 // noColor tracks if color output is disabled
@@ -73,4 +74,9 @@ func Cyan(text string) string {
 // Dim formats text with faint/dim style
 func Dim(text string) string {
 	return wrap(dimSeq, text)
+}
+
+// AccentBg formats text with white on accent background
+func AccentBg(text string) string {
+	return wrap(accentBgSeq, text)
 }
