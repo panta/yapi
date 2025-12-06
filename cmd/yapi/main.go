@@ -507,6 +507,12 @@ func newShareCmd() *cobra.Command {
 			}
 
 			content := string(data)
+
+			// Validate the config
+			analysis, _ := validation.AnalyzeConfigString(content)
+			hasErrors := analysis != nil && analysis.HasErrors()
+			hasWarnings := analysis != nil && len(analysis.Warnings) > 0
+
 			encoded, err := share.Encode(content)
 			if err != nil {
 				log.Fatalf("Failed to encode: %v", err)
@@ -524,7 +530,21 @@ func newShareCmd() *cobra.Command {
 			fmt.Fprintln(os.Stderr)
 			fmt.Fprintln(os.Stderr, color.AccentBg(" 🐑 yapi share "))
 			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, "  "+color.Green("Your yap is ready to share!"))
+
+			if hasErrors {
+				fmt.Fprintln(os.Stderr, "  "+color.Yellow("Heads up: this yap has validation errors!"))
+				fmt.Fprintln(os.Stderr)
+				for _, d := range analysis.Diagnostics {
+					if d.Severity == validation.SeverityError {
+						fmt.Fprintln(os.Stderr, "  "+color.Red(d.Message))
+					}
+				}
+				fmt.Fprintln(os.Stderr)
+			} else if hasWarnings {
+				fmt.Fprintln(os.Stderr, "  "+color.Yellow("Your yap has warnings, but it's ready to share!"))
+			} else {
+				fmt.Fprintln(os.Stderr, "  "+color.Green("Your yap is ready to share!"))
+			}
 			fmt.Fprintln(os.Stderr)
 			fmt.Fprintln(os.Stderr, color.Dim("  file     ")+filepath.Base(filename))
 			fmt.Fprintln(os.Stderr, color.Dim("  lines    ")+fmt.Sprintf("%d", lines))
