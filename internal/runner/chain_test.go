@@ -302,6 +302,40 @@ func TestInterpolateBody(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "array with variable references",
+			body: map[string]interface{}{
+				"track_indices": []interface{}{
+					"$step1.result.index",
+					"$prev.token",
+				},
+			},
+			expected: map[string]interface{}{
+				"track_indices": []interface{}{
+					float64(7),
+					"abc123",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "nested array in object",
+			body: map[string]interface{}{
+				"params": map[string]interface{}{
+					"indices": []interface{}{
+						"$step1.result.index",
+					},
+				},
+			},
+			expected: map[string]interface{}{
+				"params": map[string]interface{}{
+					"indices": []interface{}{
+						float64(7),
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -335,8 +369,40 @@ func TestInterpolateBody(t *testing.T) {
 							continue
 						}
 						for nk, nv := range expectedNested {
-							if actualNested[nk] != nv {
+							// Handle arrays in nested maps
+							if expectedArr, ok := nv.([]interface{}); ok {
+								actualArr, ok := actualNested[nk].([]interface{})
+								if !ok {
+									t.Errorf("nested key '%s.%s' expected array, got %T", k, nk, actualNested[nk])
+									continue
+								}
+								if len(actualArr) != len(expectedArr) {
+									t.Errorf("nested key '%s.%s' array length = %d, want %d", k, nk, len(actualArr), len(expectedArr))
+									continue
+								}
+								for i, ev := range expectedArr {
+									if actualArr[i] != ev {
+										t.Errorf("nested key '%s.%s[%d]' = %v, want %v", k, nk, i, actualArr[i], ev)
+									}
+								}
+							} else if actualNested[nk] != nv {
 								t.Errorf("nested key '%s.%s' = %v, want %v", k, nk, actualNested[nk], nv)
+							}
+						}
+					} else if expectedArr, ok := expectedVal.([]interface{}); ok {
+						// Handle arrays
+						actualArr, ok := actualVal.([]interface{})
+						if !ok {
+							t.Errorf("key '%s' expected array, got %T", k, actualVal)
+							continue
+						}
+						if len(actualArr) != len(expectedArr) {
+							t.Errorf("key '%s' array length = %d, want %d", k, len(actualArr), len(expectedArr))
+							continue
+						}
+						for i, ev := range expectedArr {
+							if actualArr[i] != ev {
+								t.Errorf("key '%s[%d]' = %v, want %v", k, i, actualArr[i], ev)
 							}
 						}
 					} else if actualVal != expectedVal {

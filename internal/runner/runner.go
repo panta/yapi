@@ -240,30 +240,40 @@ func interpolateBody(chainCtx *ChainContext, body map[string]interface{}) (map[s
 
 	result := make(map[string]interface{})
 	for k, v := range body {
-		switch val := v.(type) {
-		case string:
-			// First, try to resolve as a pure variable reference (preserves type)
-			if rawVal, ok := chainCtx.ResolveVariableRaw(val); ok {
-				result[k] = rawVal
-			} else {
-				// Fall back to string interpolation
-				expanded, err := chainCtx.ExpandVariables(val)
-				if err != nil {
-					return nil, err
-				}
-				result[k] = expanded
-			}
-		case map[string]interface{}:
-			nested, err := interpolateBody(chainCtx, val)
+		interpolated, err := interpolateValue(chainCtx, v)
+		if err != nil {
+			return nil, err
+		}
+		result[k] = interpolated
+	}
+	return result, nil
+}
+
+// interpolateValue recursively interpolates variables in any value
+func interpolateValue(chainCtx *ChainContext, v interface{}) (interface{}, error) {
+	switch val := v.(type) {
+	case string:
+		// First, try to resolve as a pure variable reference (preserves type)
+		if rawVal, ok := chainCtx.ResolveVariableRaw(val); ok {
+			return rawVal, nil
+		}
+		// Fall back to string interpolation
+		return chainCtx.ExpandVariables(val)
+	case map[string]interface{}:
+		return interpolateBody(chainCtx, val)
+	case []interface{}:
+		result := make([]interface{}, len(val))
+		for i, elem := range val {
+			interpolated, err := interpolateValue(chainCtx, elem)
 			if err != nil {
 				return nil, err
 			}
-			result[k] = nested
-		default:
-			result[k] = v
+			result[i] = interpolated
 		}
+		return result, nil
+	default:
+		return v, nil
 	}
-	return result, nil
 }
 
 // AssertionResult holds the result of a single assertion
