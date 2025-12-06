@@ -17,9 +17,6 @@ importers:
       ajv:
         specifier: ^8.17.1
         version: 8.17.1
-      google:
-        specifier: link:@next/third-parties/google
-        version: link:@next/third-parties/google
       monaco-editor:
         specifier: ^0.52.0
         version: 0.52.2
