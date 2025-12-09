@@ -20,9 +20,18 @@ jobs:
         with:
           go-version: stable
 
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.POSTHOG_API_KEY }}" ]; then
+            echo "Error: POSTHOG_API_KEY secret is not set"
+            exit 1
+          fi
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_PAT }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_API_HOST: https://us.i.posthog.com

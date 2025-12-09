@@ -1,10 +1,16 @@
-.PHONY: build run test fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
+.PHONY: build run run-print-analytics test fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
+# PostHog keys - set via environment or CI/CD secrets
+# These are write-only project keys, but kept out of git history for cleanliness
+POSTHOG_API_KEY ?=
+POSTHOG_API_HOST ?= https://us.i.posthog.com
+LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE) \
+	-X yapi.run/cli/internal/telemetry.PosthogAPIKey=$(POSTHOG_API_KEY) \
+	-X yapi.run/cli/internal/telemetry.PosthogAPIHost=$(POSTHOG_API_HOST)
 
 install: build
 	@echo "Installing yapi to $$(go env GOPATH)/bin..."
@@ -24,6 +30,10 @@ build:
 run:
 	@echo "Running yapi CLI..."
 	@go run ./cmd/yapi
+
+run-print-analytics: build
+	@echo "Running yapi CLI with analytics printing..."
+	@YAPI_PRINT_ANALYTICS=1 ./bin/yapi $(RUN_ARGS)
 
 test:
 	@echo "Running all tests..."

@@ -1,0 +1,64 @@
+name: Installer Scripts
+
+on:
+  push:
+    branches: [main, jp/just-show-total-downloads]
+    paths:
+      - 'webapp/public/install/**'
+      - '.github/workflows/installer-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'webapp/public/install/**'
+      - '.github/workflows/installer-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  test-linux:
+    name: Test Linux Installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run installer script
+        run: |
+          chmod +x webapp/public/install/linux.sh
+          sudo bash webapp/public/install/linux.sh
+
+      - name: Verify installation
+        run: |
+          which yapi
+          yapi version
+
+  test-macos:
+    name: Test macOS Installer
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run installer script
+        run: |
+          chmod +x webapp/public/install/mac.sh
+          sudo bash webapp/public/install/mac.sh
+
+      - name: Verify installation
+        run: |
+          which yapi
+          yapi version
+
+  test-windows:
+    name: Test Windows Installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run installer script
+        shell: pwsh
+        run: |
+          & webapp/public/install/windows.ps1
+          # Verify it installed correctly
+          $yapiPath = "$env:LOCALAPPDATA\yapi\yapi.exe"
+          if (-not (Test-Path $yapiPath)) {
+            throw "yapi.exe not found at $yapiPath"
+          }
+          & $yapiPath version
