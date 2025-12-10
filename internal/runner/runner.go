@@ -88,8 +88,13 @@ type ChainResult struct {
 	ExpectationResults []*ExpectationResult // Expectation results from each step
 }
 
+// ExecutorFactory is an interface for creating transport functions
+type ExecutorFactory interface {
+	Create(transport string) (executor.TransportFunc, error)
+}
+
 // RunChain executes a sequence of steps, merging each step with the base config
-func RunChain(ctx context.Context, factory *executor.Factory, base *config.ConfigV1, steps []config.ChainStep, opts Options) (*ChainResult, error) {
+func RunChain(ctx context.Context, factory ExecutorFactory, base *config.ConfigV1, steps []config.ChainStep, opts Options) (*ChainResult, error) {
 	chainCtx := NewChainContext()
 	chainResult := &ChainResult{
 		Results:            make([]*Result, 0, len(steps)),
@@ -109,28 +114,44 @@ func RunChain(ctx context.Context, factory *executor.Factory, base *config.Confi
 			return nil, fmt.Errorf("step '%s': %w", step.Name, err)
 		}
 
-		// 3. Convert to domain request (handles ALL transports: HTTP, TCP, gRPC, GraphQL)
+		// 3. Handle Delay (wait before executing step)
+		if interpolatedConfig.Delay != "" {
+			d, err := time.ParseDuration(interpolatedConfig.Delay)
+			if err != nil {
+				return nil, fmt.Errorf("step '%s' invalid delay '%s': %w", step.Name, interpolatedConfig.Delay, err)
+			}
+			if d > 0 {
+				fmt.Fprintf(os.Stderr, "[INFO] Delaying for %s...\n", d)
+				select {
+				case <-time.After(d):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+		}
+
+		// 4. Convert to domain request (handles ALL transports: HTTP, TCP, gRPC, GraphQL)
 		req, err := interpolatedConfig.ToDomain()
 		if err != nil {
 			return nil, fmt.Errorf("step '%s': %w", step.Name, err)
 		}
 
-		// 4. Create executor for this step's transport
+		// 5. Create executor for this step's transport
 		exec, err := factory.Create(req.Metadata["transport"])
 		if err != nil {
 			return nil, fmt.Errorf("step '%s': %w", step.Name, err)
 		}
 
-		// 5. Execute
+		// 6. Execute
 		result, err := Run(ctx, exec, req, []string{}, opts)
 		if err != nil {
 			return nil, fmt.Errorf("step '%s' failed: %w", step.Name, err)
 		}
 
-		// 6. Assert Expectations
+		// 7. Assert Expectations
 		expectRes := CheckExpectations(step.Expect, result)
 
-		// 7. Store Result (including expectation result even if failed)
+		// 8. Store Result (including expectation result even if failed)
 		chainCtx.AddResult(step.Name, result)
 		chainResult.Results = append(chainResult.Results, result)
 		chainResult.StepNames = append(chainResult.StepNames, step.Name)
@@ -226,6 +247,15 @@ func interpolateConfig(chainCtx *ChainContext, cfg *config.ConfigV1) (*config.Co
 			return nil, fmt.Errorf("variables: %w", err)
 		}
 		result.Variables = newVars
+	}
+
+	// Interpolate Delay
+	if result.Delay != "" {
+		expanded, err := chainCtx.ExpandVariables(result.Delay)
+		if err != nil {
+			return nil, fmt.Errorf("delay: %w", err)
+		}
+		result.Delay = expanded
 	}
 
 	return &result, nil

@@ -1,9 +1,15 @@
 package runner
 
 import (
+	"context"
+	"io"
+	"strings"
 	"testing"
+	"time"
 
 	"yapi.run/cli/internal/config"
+	"yapi.run/cli/internal/domain"
+	"yapi.run/cli/internal/executor"
 )
 
 func TestCheckExpectations_Status(t *testing.T) {
@@ -411,5 +417,180 @@ func TestInterpolateBody(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// mockExecutorFactory is a test helper that returns a configurable transport
+type mockExecutorFactory struct {
+	transport executor.TransportFunc
+}
+
+func (m *mockExecutorFactory) Create(transportType string) (executor.TransportFunc, error) {
+	return m.transport, nil
+}
+
+func TestRunChain_Delay(t *testing.T) {
+	// Test that delay waits before executing the request
+	base := &config.ConfigV1{URL: "http://example.com"}
+	steps := []config.ChainStep{
+		{
+			Name: "delayed_request",
+			ConfigV1: config.ConfigV1{
+				URL:   "http://example.com",
+				Delay: "100ms",
+			},
+		},
+	}
+
+	transportCalled := false
+	mockTransport := func(ctx context.Context, req *domain.Request) (*domain.Response, error) {
+		transportCalled = true
+		return &domain.Response{
+			StatusCode: 200,
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			Body:       io.NopCloser(strings.NewReader(`{"status": "ok"}`)),
+		}, nil
+	}
+
+	factory := &mockExecutorFactory{transport: mockTransport}
+
+	start := time.Now()
+	result, err := RunChain(context.Background(), factory, base, steps, Options{})
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("RunChain() returned unexpected error: %v", err)
+	}
+
+	// Verify timing - should have delayed at least 100ms
+	if elapsed < 100*time.Millisecond {
+		t.Errorf("execution was too fast (%v), delay didn't work", elapsed)
+	}
+
+	// Verify transport WAS called (delay doesn't skip request)
+	if !transportCalled {
+		t.Error("transport should be called for delay steps")
+	}
+
+	// Verify we got the actual response body
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
+	}
+	if !strings.Contains(result.Results[0].Body, "status") {
+		t.Errorf("expected actual response body, got: %s", result.Results[0].Body)
+	}
+}
+
+func TestRunChain_DelayInvalidDuration(t *testing.T) {
+	// Test error handling for invalid delay duration format
+	base := &config.ConfigV1{URL: "http://example.com"}
+	steps := []config.ChainStep{
+		{
+			Name: "bad_delay",
+			ConfigV1: config.ConfigV1{
+				URL:   "http://example.com",
+				Delay: "abc", // Invalid format
+			},
+		},
+	}
+
+	mockTransport := func(ctx context.Context, req *domain.Request) (*domain.Response, error) {
+		return &domain.Response{
+			StatusCode: 200,
+			Headers:    map[string]string{},
+			Body:       io.NopCloser(strings.NewReader(`{}`)),
+		}, nil
+	}
+
+	factory := &mockExecutorFactory{transport: mockTransport}
+
+	_, err := RunChain(context.Background(), factory, base, steps, Options{})
+	if err == nil {
+		t.Error("expected error for invalid duration, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid delay") {
+		t.Errorf("expected 'invalid delay' error, got: %v", err)
+	}
+}
+
+func TestRunChain_DelayContextCancellation(t *testing.T) {
+	// Test that delay respects context cancellation
+	base := &config.ConfigV1{URL: "http://example.com"}
+	steps := []config.ChainStep{
+		{
+			Name: "long_delay",
+			ConfigV1: config.ConfigV1{
+				URL:   "http://example.com",
+				Delay: "5s", // Long delay
+			},
+		},
+	}
+
+	mockTransport := func(ctx context.Context, req *domain.Request) (*domain.Response, error) {
+		return &domain.Response{
+			StatusCode: 200,
+			Headers:    map[string]string{},
+			Body:       io.NopCloser(strings.NewReader(`{}`)),
+		}, nil
+	}
+
+	factory := &mockExecutorFactory{transport: mockTransport}
+
+	// Create context with short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := RunChain(ctx, factory, base, steps, Options{})
+	elapsed := time.Since(start)
+
+	// Should have cancelled quickly, not waited 5 seconds
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("context cancellation didn't work, elapsed: %v", elapsed)
+	}
+
+	if err == nil {
+		t.Error("expected context error, got nil")
+	}
+	if !strings.Contains(err.Error(), "context") {
+		t.Errorf("expected context error, got: %v", err)
+	}
+}
+
+func TestRunChain_NegativeDelay(t *testing.T) {
+	// Test that negative delay doesn't cause issues (should be skipped)
+	base := &config.ConfigV1{URL: "http://example.com"}
+	steps := []config.ChainStep{
+		{
+			Name: "negative_delay",
+			ConfigV1: config.ConfigV1{
+				URL:   "http://example.com",
+				Delay: "-5s",
+			},
+		},
+	}
+
+	mockTransport := func(ctx context.Context, req *domain.Request) (*domain.Response, error) {
+		return &domain.Response{
+			StatusCode: 200,
+			Headers:    map[string]string{},
+			Body:       io.NopCloser(strings.NewReader(`{}`)),
+		}, nil
+	}
+
+	factory := &mockExecutorFactory{transport: mockTransport}
+
+	start := time.Now()
+	_, err := RunChain(context.Background(), factory, base, steps, Options{})
+	elapsed := time.Since(start)
+
+	// Should complete quickly since negative duration is skipped
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("negative duration caused unexpected delay: %v", elapsed)
+	}
+
+	// Should not error - negative duration is just skipped
+	if err != nil {
+		t.Errorf("unexpected error for negative duration: %v", err)
 	}
 }

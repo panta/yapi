@@ -1,0 +1,23 @@
+# Example: Chain with delay flow control
+# - delay: Waits before executing the step (useful for rate limiting, timed sequences)
+yapi: v1
+chain:
+  - name: get_todo
+    url: https://jsonplaceholder.typicode.com/todos/1
+    method: GET
+    expect:
+      status: 200
+      assert:
+        - .userId != null
+        - .id == 1
+
+  - name: get_user
+    delay: 2s  # Wait 2 seconds, then make the request
+    url: https://jsonplaceholder.typicode.com/users/${get_todo.userId}
+    method: GET
+    expect:
+      status: 200
+      assert:
+        - .name != null
+        - .email != null
+

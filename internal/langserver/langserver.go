@@ -303,6 +303,7 @@ var topLevelKeys = []struct {
 	{"plaintext", "Use plaintext gRPC (boolean)"},
 	{"read_timeout", "TCP read timeout in seconds"},
 	{"close_after_send", "Close TCP connection after sending (boolean)"},
+	{"delay", "Wait before executing this step (e.g. 5s, 500ms)"},
 }
 
 var methodValues = []valDesc{

@@ -43,6 +43,7 @@ var knownV1Keys = map[string]bool{
 	"close_after_send": true,
 	"chain":            true,
 	"expect":           true,
+	"delay":            true,
 }
 
 // knownChainStepKeys is the set of valid keys for chain step entries.
@@ -73,6 +74,7 @@ var knownChainStepKeys = map[string]bool{
 	"idle_timeout":     true,
 	"close_after_send": true,
 	"expect":           true,
+	"delay":            true,
 }
 
 // knownExpectKeys is the set of valid keys for expect blocks.
@@ -120,6 +122,9 @@ type ConfigV1 struct {
 	IdleTimeout    int                    `yaml:"idle_timeout,omitempty"` // TCP idle timeout in milliseconds (default 500)
 	CloseAfterSend bool                   `yaml:"close_after_send,omitempty"`
 
+	// Flow control
+	Delay string `yaml:"delay,omitempty"` // Wait before executing this step (e.g. "5s", "500ms")
+
 	// Expect defines assertions to run after the request
 	Expect Expectation `yaml:"expect,omitempty"`
 
@@ -155,6 +160,7 @@ func (base *ConfigV1) Merge(step ChainStep) ConfigV1 {
 	m.Data = utils.Coalesce(step.Data, base.Data)
 	m.Encoding = utils.Coalesce(step.Encoding, base.Encoding)
 	m.JQFilter = utils.Coalesce(step.JQFilter, base.JQFilter)
+	m.Delay = utils.Coalesce(step.Delay, base.Delay)
 
 	// Bool/Int overrides
 	if step.Insecure {

@@ -111,6 +111,48 @@ func TestMerge_BodyDeepCopy(t *testing.T) {
 	}
 }
 
+func TestMerge_FlowControl(t *testing.T) {
+	// Case 1: Base has delay, step inherits it
+	base := &ConfigV1{
+		URL:   "http://example.com",
+		Delay: "1s",
+	}
+	step := ChainStep{
+		Name: "inherit_delay",
+	}
+	merged := base.Merge(step)
+	if merged.Delay != "1s" {
+		t.Errorf("expected delay '1s', got '%s'", merged.Delay)
+	}
+
+	// Case 2: Step overrides delay
+	stepOverride := ChainStep{
+		Name: "override_delay",
+		ConfigV1: ConfigV1{
+			Delay: "5s",
+		},
+	}
+	mergedOverride := base.Merge(stepOverride)
+	if mergedOverride.Delay != "5s" {
+		t.Errorf("expected delay '5s', got '%s'", mergedOverride.Delay)
+	}
+
+	// Case 3: Step adds delay
+	baseNoDelay := &ConfigV1{
+		URL: "http://example.com",
+	}
+	stepWithDelay := ChainStep{
+		Name: "add_delay",
+		ConfigV1: ConfigV1{
+			Delay: "500ms",
+		},
+	}
+	mergedAddDelay := baseNoDelay.Merge(stepWithDelay)
+	if mergedAddDelay.Delay != "500ms" {
+		t.Errorf("expected delay '500ms', got '%s'", mergedAddDelay.Delay)
+	}
+}
+
 func TestDeepCloneMap(t *testing.T) {
 	src := map[string]interface{}{
 		"string": "value",
