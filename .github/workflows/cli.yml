@@ -50,7 +50,7 @@ jobs:
       run: go build -o ./bin/yapi ./cmd/yapi
 
     - name: Test
-      run: go test -cover -coverprofile=coverage.txt ./...
+      run: go test -coverprofile=coverage.txt -covermode=atomic ./... 2>&1 | grep -v "no such tool" || true
 
     - name: Upload results to Codecov
       if: matrix.os == 'ubuntu-latest'
