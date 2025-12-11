@@ -184,3 +184,36 @@ func TestApplyJQ_EmptyResult(t *testing.T) {
 		t.Errorf("ApplyJQ() = %q, want empty string", got)
 	}
 }
+
+func FuzzApplyJQ(f *testing.F) {
+	// Seed with valid JSON + jq filter pairs
+	f.Add(`{"foo": "bar"}`, ".foo")
+	f.Add(`{"a": {"b": 42}}`, ".a.b")
+	f.Add(`[1, 2, 3, 4, 5]`, ".[] | select(. > 2)")
+	f.Add(`{"items": [{"x": 1}, {"x": 2}]}`, ".items | map(.x)")
+	f.Add(`{"big": 4722366482869645213696}`, ".big")
+	f.Add(`null`, ".")
+	f.Add(`"hello"`, ".")
+	f.Add(`123`, ". + 1")
+	f.Add(`[{"id":1},{"id":2}]`, ".[] | .id")
+	f.Add(`{}`, "keys")
+
+	f.Fuzz(func(t *testing.T, input string, filter string) {
+		// ApplyJQ should not panic on any input
+		_, _ = ApplyJQ(input, filter)
+	})
+}
+
+func FuzzEvalJQBool(f *testing.F) {
+	// Seed with valid JSON + jq boolean expressions
+	f.Add(`{"status": 200}`, ".status == 200")
+	f.Add(`{"items": [1,2,3]}`, ".items | length > 0")
+	f.Add(`{"active": true}`, ".active")
+	f.Add(`{"value": 10}`, ".value >= 5 and .value <= 15")
+	f.Add(`{"name": "test"}`, `.name == "test"`)
+
+	f.Fuzz(func(t *testing.T, input string, expr string) {
+		// EvalJQBool should not panic on any input
+		_, _ = EvalJQBool(input, expr)
+	})
+}

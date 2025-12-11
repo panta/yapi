@@ -263,3 +263,128 @@ data: hello`)
 		t.Errorf("expected no issues for minimal valid TCP config, got %d: %+v", len(issues), issues)
 	}
 }
+
+func FuzzAnalyzeConfigString(f *testing.F) {
+	// Seed with various YAML configs
+	f.Add(`yapi: v1
+url: https://example.com
+method: GET`)
+
+	f.Add(`yapi: v1
+url: https://api.example.com/users
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer $TOKEN
+body:
+  name: test
+  email: test@example.com`)
+
+	f.Add(`yapi: v1
+url: https://example.com/graphql
+graphql: |
+  query GetUsers($limit: Int!) {
+    users(limit: $limit) {
+      id
+      name
+    }
+  }
+variables:
+  limit: 10`)
+
+	f.Add(`yapi: v1
+url: grpc://localhost:50051
+service: example.UserService
+rpc: GetUser
+body:
+  user_id: 123`)
+
+	f.Add(`yapi: v1
+url: tcp://localhost:8080
+data: "PING\r\n"
+encoding: text
+read_timeout: 5000`)
+
+	// Chain config
+	f.Add(`yapi: v1
+chain:
+  - name: login
+    url: https://example.com/auth
+    method: POST
+    body:
+      username: admin
+      password: secret
+  - name: get_data
+    url: https://example.com/api/data
+    headers:
+      Authorization: "Bearer ${login.response.body.token}"
+    expect:
+      assert:
+        - .status == 200`)
+
+	// Edge cases
+	f.Add(``)
+	f.Add(`yapi: v1`)
+	f.Add(`url: no-version`)
+	f.Add(`yapi: v99
+url: unsupported`)
+	f.Add(`{invalid yaml`)
+	f.Add(`- list
+- of
+- items`)
+
+	// JQ filters
+	f.Add(`yapi: v1
+url: https://example.com
+jq: .data.items | map(.id)`)
+
+	f.Fuzz(func(t *testing.T, input string) {
+		// AnalyzeConfigString should not panic on any input
+		_, _ = AnalyzeConfigString(input)
+	})
+}
+
+func FuzzFindEnvVarRefs(f *testing.F) {
+	f.Add(`url: https://example.com
+headers:
+  Authorization: Bearer $TOKEN`)
+
+	f.Add(`url: $BASE_URL/api
+headers:
+  X-API-Key: ${API_KEY}`)
+
+	f.Add(`graphql: |
+  query($id: ID!) {
+    user(id: $id) {
+      name
+    }
+  }`)
+
+	f.Add(`body:
+  key: ${NESTED_${VAR}}`)
+
+	f.Add(`$VAR1 $VAR2 ${VAR3} ${VAR4}`)
+	f.Add(`no variables here`)
+	f.Add(``)
+
+	f.Fuzz(func(t *testing.T, input string) {
+		// FindEnvVarRefs should not panic on any input
+		_ = FindEnvVarRefs(input)
+	})
+}
+
+func FuzzRedactValue(f *testing.F) {
+	f.Add("")
+	f.Add("a")
+	f.Add("ab")
+	f.Add("abc")
+	f.Add("abcd")
+	f.Add("abcde")
+	f.Add("secret_password_12345")
+	f.Add("sk-proj-1234567890abcdef")
+
+	f.Fuzz(func(t *testing.T, input string) {
+		// RedactValue should not panic on any input
+		_ = RedactValue(input)
+	})
+}

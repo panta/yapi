@@ -11,7 +11,7 @@ import (
 func main() {
 	fuzzTime := os.Getenv("FUZZTIME")
 	if fuzzTime == "" {
-		fuzzTime = "30s"
+		fuzzTime = "5s"
 	}
 
 	// Get all packages

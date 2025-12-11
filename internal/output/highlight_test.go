@@ -161,3 +161,77 @@ func TestHighlightWithChroma_ContainsANSI(t *testing.T) {
 		t.Log("Warning: highlightWithChroma result may not contain ANSI codes")
 	}
 }
+
+func FuzzHighlight(f *testing.F) {
+	// Seed with various content types and payloads
+	f.Add(`{"key": "value"}`, "application/json")
+	f.Add(`{"nested": {"deep": {"value": 123}}}`, "application/json")
+	f.Add(`[1, 2, 3, "four", null, true]`, "application/json")
+	f.Add(`<!DOCTYPE html><html><body><p>Hello</p></body></html>`, "text/html")
+	f.Add(`<html><head><title>Test</title></head></html>`, "text/html")
+	f.Add(`plain text content`, "text/plain")
+	f.Add(``, "application/json")
+	f.Add(`null`, "application/json")
+	f.Add(`"just a string"`, "application/json")
+	f.Add(`12345`, "application/json")
+	f.Add(`{invalid json}`, "application/json")
+	f.Add(`<not>valid<html`, "text/html")
+	f.Add(`{"unicode": "日本語 🚀 emoji"}`, "application/json")
+
+	f.Fuzz(func(t *testing.T, raw string, contentType string) {
+		// Highlight should not panic on any input
+		_ = Highlight(raw, contentType, true)
+		_ = Highlight(raw, contentType, false)
+	})
+}
+
+func FuzzDetectLanguage(f *testing.F) {
+	f.Add(`{"key": "value"}`, "application/json")
+	f.Add(`<html></html>`, "text/html")
+	f.Add(`plain text`, "")
+	f.Add(`  {  "with": "whitespace" }`, "")
+	f.Add(`<!doctype html>`, "")
+	f.Add(``, "unknown/type")
+
+	f.Fuzz(func(t *testing.T, raw string, contentType string) {
+		// detectLanguage should not panic on any input
+		result := detectLanguage(raw, contentType)
+		// Result should always be either "json" or "html"
+		if result != "json" && result != "html" {
+			t.Errorf("detectLanguage returned unexpected value: %q", result)
+		}
+	})
+}
+
+func FuzzPrettyPrintJSON(f *testing.F) {
+	f.Add(`{"key": "value"}`)
+	f.Add(`[1, 2, 3]`)
+	f.Add(`null`)
+	f.Add(`"string"`)
+	f.Add(`123`)
+	f.Add(`true`)
+	f.Add(`{"deeply": {"nested": {"object": {"with": "values"}}}}`)
+	f.Add(`not valid json`)
+	f.Add(``)
+	f.Add(`{"big": 4722366482869645213696}`)
+
+	f.Fuzz(func(t *testing.T, raw string) {
+		// prettyPrintJSON should not panic on any input
+		_ = prettyPrintJSON(raw)
+	})
+}
+
+func FuzzPrettyPrintHTML(f *testing.F) {
+	f.Add(`<!DOCTYPE html><html><body></body></html>`)
+	f.Add(`<html><head><title>Test</title></head><body><p>Hello</p></body></html>`)
+	f.Add(`<div><span>nested</span></div>`)
+	f.Add(`not valid html`)
+	f.Add(`<unclosed`)
+	f.Add(``)
+	f.Add(`<script>alert('xss')</script>`)
+
+	f.Fuzz(func(t *testing.T, raw string) {
+		// prettyPrintHTML should not panic on any input
+		_ = prettyPrintHTML(raw)
+	})
+}
