@@ -21,9 +21,7 @@ jobs:
         cache-dependency-path: go.sum
 
     - name: Generate coverage
-      run: |
-        go test -coverprofile=coverage.txt -covermode=atomic ./... || true
-        make fuzz-coverage
+      run: go test -coverprofile=coverage.txt -covermode=atomic ./... || true
 
     - name: Upload results to Codecov
       uses: codecov/codecov-action@v5

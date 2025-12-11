@@ -1,4 +1,4 @@
-.PHONY: build run run-print-analytics test fuzz fuzz-coverage fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
+.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -35,9 +35,6 @@ test:
 
 fuzz:
 	@./scripts/fuzz.sh
-
-fuzz-coverage:
-	@COVERAGE=true ./scripts/fuzz.sh
 
 fmt:
 	@echo "Formatting code..."
