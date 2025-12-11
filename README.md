@@ -233,31 +233,31 @@ yapi watch ./my-request.yapi.yml
 
 -----
 
-## 🧠 Editor Integration
+## 🧠 Editor Integration (LSP)
 
-### Language Server
+Unlike other API clients, **yapi** ships with a **full LSP implementation** out of the box. No extensions to install, no separate tools to configure. Your editor becomes an intelligent API development environment.
 
-**yapi** ships with a full Language Server Protocol (LSP) implementation that brings IDE-level intelligence to your `.yapi.yml` files:
+```bash
+yapi lsp
+```
 
-**Real-time Validation** - Errors and warnings appear as you type, with precise line/column positions. The LSP runs the same validation as the CLI, catching issues before you execute.
+### What You Get
 
-**Intelligent Autocompletion** - Context-aware suggestions for:
-- Top-level keys (`url`, `method`, `headers`, `body`, `query`, `graphql`, `jq_filter`, etc.)
-- HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`)
-- Encoding types (`text`, `hex`, `base64`)
-- Boolean fields (`insecure`, `plaintext`, `close_after_send`)
+| Feature | Description |
+|---------|-------------|
+| **Real-time Validation** | Errors and warnings as you type, with precise line/column positions. Catches issues before you hit run. |
+| **Intelligent Autocompletion** | Context-aware suggestions for keys, HTTP methods, content types, and more. |
+| **Hover Info** | Hover over `${VAR}` to see environment variable status and (redacted) values. |
+| **Go to Definition** | Jump to referenced chain steps and variables. |
 
-**Hover Information** - Hover over `${VAR}` references to see environment variable status and (redacted) values.
+### Neovim (Native Plugin)
 
-### Neovim
-
-**yapi** was built with Neovim in mind. We have a native plugin in `lua/yapi_nvim`.
-
-**Lazy.nvim setup:**
+**yapi** was built with Neovim in mind. First-class support via `lua/yapi_nvim`:
 
 ```lua
+-- lazy.nvim
 {
-  dir = "~/path/to/yapi/lua/yapi_nvim", -- or point to your installed path
+  dir = "~/path/to/yapi/lua/yapi_nvim",
   config = function()
     require("yapi_nvim").setup({
       lsp = true,    -- Enables the yapi Language Server
@@ -267,16 +267,13 @@ yapi watch ./my-request.yapi.yml
 }
 ```
 
-  * `:YapiRun` - Run the current buffer.
-  * `:YapiWatch` - Open a split and watch the current buffer.
+Commands:
+- `:YapiRun` - Execute the current buffer
+- `:YapiWatch` - Open a split with live reload
 
-### VS Code / Others
+### VS Code / Any LSP-Compatible Editor
 
-The LSP runs over stdio and works with any editor that supports the protocol:
-
-```bash
-yapi lsp
-```
+The LSP communicates over stdio and works with any editor that supports the Language Server Protocol. Point your editor's LSP client to `yapi lsp` and you're set.
 
 -----
 

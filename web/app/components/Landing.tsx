@@ -178,9 +178,9 @@ export default async function Landing() {
             desc="Review API changes in Pull Requests. Diff your request bodies. Merge conflicts are just text conflicts. True collaboration."
           />
           <FeatureCard
-            icon="📺"
-            title="TUI & Watch Mode"
-            desc="Includes an interactive terminal UI for browsing collections, and a 'watch' mode that re-runs requests when you save the file."
+            icon="🧠"
+            title="Built-in LSP"
+            desc="Full Language Server with autocompletion, real-time validation, and hover info. Works with Neovim, VS Code, and any LSP-compatible editor."
           />
         </div>
 
