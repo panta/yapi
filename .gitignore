@@ -6,7 +6,7 @@ cli/fzf-refernce-dont-use
 cli/yapi-test
 cli/yapi
 bin/yapi
-# yapi
+/yapi
 .gitsecret/keys/random_seed
 !*.secret
 .posthog.env
