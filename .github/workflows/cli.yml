@@ -53,5 +53,4 @@ jobs:
       run: go test ./...
 
     - name: Fuzz tests
-      run: |
-        go test -fuzz=FuzzDecode -fuzztime=30s ./internal/share/
+      run: make fuzz
