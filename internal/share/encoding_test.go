@@ -86,3 +86,21 @@ func TestShareURL(t *testing.T) {
 		t.Errorf("URL should start with %s, got: %s", prefix, url)
 	}
 }
+
+func FuzzDecode(f *testing.F) {
+	// Seed with valid encoded strings
+	f.Add("ABC123")
+	f.Add("")
+	f.Add("~_.-")
+	f.Add("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+
+	// Add a real encoded value
+	if encoded, err := Encode("hello world"); err == nil {
+		f.Add(encoded)
+	}
+
+	f.Fuzz(func(t *testing.T, input string) {
+		// Decode should not panic on any input
+		_, _ = Decode(input)
+	})
+}
