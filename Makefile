@@ -34,7 +34,7 @@ test:
 	@go test ./...
 
 fuzz:
-	@./scripts/fuzz.sh
+	@go run ./scripts/fuzz.go
 
 fmt:
 	@echo "Formatting code..."
