@@ -50,10 +50,4 @@ jobs:
       run: go build -o ./bin/yapi ./cmd/yapi
 
     - name: Test
-      run: go test -coverprofile=coverage.txt -covermode=atomic ./... 2>&1 | grep -v "no such tool" || true
-
-    - name: Upload results to Codecov
-      if: matrix.os == 'ubuntu-latest'
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
+      run: go test ./...
