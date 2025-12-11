@@ -50,4 +50,10 @@ jobs:
       run: go build -o ./bin/yapi ./cmd/yapi
 
     - name: Test
-      run: go test ./...
+      run: go test -coverprofile=coverage.txt ./...
+
+    - name: Upload results to Codecov
+      if: matrix.os == 'ubuntu-latest'
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
