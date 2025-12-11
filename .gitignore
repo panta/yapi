@@ -19,3 +19,4 @@ node_modules
 .opencode
 main.md
 coverage.txt
+fuzz.cov

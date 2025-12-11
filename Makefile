@@ -6,6 +6,11 @@ COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
+fuzz-cover:
+	@go test ./... -run=Fuzz -coverprofile=fuzz.cov
+	@go tool cover -func=fuzz.cov
+
+
 install: build
 	@echo "Installing yapi to $$(go env GOPATH)/bin..."
 	@cp ./bin/yapi $$(go env GOPATH)/bin/yapi
