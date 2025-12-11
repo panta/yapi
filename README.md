@@ -13,37 +13,31 @@ Stop clicking through heavy Electron apps just to send a JSON body. **yapi** is 
 
 ## ⚡ Install
 
-**Using Homebrew (macOS):**
+**macOS:**
 
 ```bash
-brew tap jamierpond/yapi
-brew install --cask yapi
+curl -fsSL https://yapi.run/install/mac.sh | bash
 ```
 
-**Linux (from GitHub Releases):**
+**Linux:**
 
 ```bash
-# For amd64
-curl -sL https://github.com/jamierpond/yapi/releases/latest/download/yapi_linux_amd64.tar.gz | tar xz
-sudo mv yapi /usr/local/bin/
-
-# For arm64
-curl -sL https://github.com/jamierpond/yapi/releases/latest/download/yapi_linux_arm64.tar.gz | tar xz
-sudo mv yapi /usr/local/bin/
+curl -fsSL https://yapi.run/install/linux.sh | bash
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-# For amd64
-Invoke-WebRequest -Uri "https://github.com/jamierpond/yapi/releases/latest/download/yapi_windows_amd64.zip" -OutFile yapi.zip
-Expand-Archive yapi.zip -DestinationPath .
-Move-Item yapi.exe "$env:LOCALAPPDATA\Microsoft\WindowsApps\"
+irm https://yapi.run/install/windows.ps1 | iex
+```
 
-# For arm64
-Invoke-WebRequest -Uri "https://github.com/jamierpond/yapi/releases/latest/download/yapi_windows_arm64.zip" -OutFile yapi.zip
-Expand-Archive yapi.zip -DestinationPath .
-Move-Item yapi.exe "$env:LOCALAPPDATA\Microsoft\WindowsApps\"
+### Alternative Installation Methods
+
+**Using Homebrew (macOS):**
+
+```bash
+brew tap jamierpond/yapi
+brew install --cask yapi
 ```
 
 **Using Go:**
