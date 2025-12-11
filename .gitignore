@@ -18,3 +18,4 @@ market-research/bru
 node_modules
 .opencode
 main.md
+coverage.txt
