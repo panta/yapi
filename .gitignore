@@ -11,3 +11,8 @@ yapi
 !*.secret
 .posthog.env
 prompt.md
+market-research/http
+market-research/rest
+market-research/bru
+.vercel
+node_modules

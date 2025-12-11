@@ -1,10 +1,9 @@
 {
-  "name": "yapi-test",
+  "name": "web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm run cp:depends && next dev",
-    "cp:depends": "cp ../.depends .",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
