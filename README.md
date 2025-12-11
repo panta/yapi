@@ -4,6 +4,7 @@
 [![Playground](https://yapi.run/badge.svg)](https://yapi.run/playground)
 [![Go Report Card](https://goreportcard.com/badge/yapi.run/cli)](https://goreportcard.com/report/yapi.run/cli)
 [![GitHub stars](https://img.shields.io/github/stars/jamierpond/yapi?style=social)](https://github.com/jamierpond/yapi)
+[![codecov](https://codecov.io/github/jamierpond/yapi/graph/badge.svg?token=IAIYWLFRLM)](https://codecov.io/github/jamierpond/yapi)
 
 **The API client that lives in your terminal (and your git repo).**
 
