@@ -1,4 +1,4 @@
-.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
+.PHONY: build run run-print-analytics test fuzz fuzz-coverage fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -34,13 +34,10 @@ test:
 	@go test ./...
 
 fuzz:
-	@echo "Running fuzz tests..."
-	@for pkg in $$(go list ./... | xargs -I{} sh -c 'go test -list "^Fuzz" {} 2>/dev/null | grep -q "^Fuzz" && echo {}'); do \
-		for fuzz in $$(go test -list "^Fuzz" $$pkg 2>/dev/null | grep "^Fuzz"); do \
-			echo "Fuzzing $$fuzz in $$pkg"; \
-			go test -fuzz=$$fuzz -fuzztime=30s $$pkg || exit 1; \
-		done; \
-	done
+	@./scripts/fuzz.sh
+
+fuzz-coverage:
+	@COVERAGE=true ./scripts/fuzz.sh
 
 fmt:
 	@echo "Formatting code..."
