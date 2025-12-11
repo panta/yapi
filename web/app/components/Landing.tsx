@@ -2,28 +2,25 @@ import Link from "next/link";
 import CopyInstallButton from "./CopyInstallButton";
 import LandingStyles from "./LandingStyles";
 import Navbar from "./Navbar";
+import { getTotalDownloads } from "@/app/lib/github";
 
 async function getStats() {
   try {
-    const [downloadsRes, releasesRes] = await Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/downloads`, {
-        next: { revalidate: 3600 },
-      }),
+    const [totalDownloads, releasesRes] = await Promise.all([
+      getTotalDownloads(),
       fetch("https://api.github.com/repos/jamierpond/yapi/releases/latest", {
         next: { revalidate: 3600 },
       }),
     ]);
 
-    const downloads = downloadsRes.ok ? await downloadsRes.json() : { total_downloads: 0, total_releases: 0 };
     const release = releasesRes.ok ? await releasesRes.json() : { tag_name: null };
 
     return {
-      totalDownloads: downloads.total_downloads || 0,
-      totalReleases: downloads.total_releases || 0,
+      totalDownloads: totalDownloads || 0,
       latestVersion: release.tag_name || null,
     };
   } catch {
-    return { totalDownloads: 0, totalReleases: 0, latestVersion: null };
+    return { totalDownloads: 0, latestVersion: null };
   }
 }
 

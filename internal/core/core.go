@@ -12,8 +12,8 @@ import (
 )
 
 // RequestHook is called after a request completes with stats about the execution.
-// This allows the caller (main.go) to wire telemetry without core knowing about it.
-type RequestHook func(stats map[string]interface{})
+// This allows the caller (main.go) to wire observability without core knowing about it.
+type RequestHook func(stats map[string]any)
 
 // Engine owns shared execution bits used by CLI, TUI, etc.
 type Engine struct {

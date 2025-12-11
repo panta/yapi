@@ -1,5 +1,3 @@
-import { NextResponse } from "next/server";
-
 // GraphQL response types
 type Asset = {
   name: string;
@@ -64,15 +62,17 @@ async function fetchAllReleases(token: string) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query: buildQuery(cursor) }),
+      next: { revalidate: 3600 },
     });
 
     if (!res.ok) {
-      throw new Error("Failed to fetch releases");
+      throw new Error(`GitHub API returned ${res.status}`);
     }
 
-    const { data }: GraphQLResponse = await res.json();
+    const json = await res.json();
+    const { data } = json as GraphQLResponse;
 
-    if (!data?.repository) {
+    if (json.errors || !data?.repository) {
       return { nodes: [], totalCount: 0 };
     }
 
@@ -90,37 +90,37 @@ async function fetchAllReleases(token: string) {
   return { nodes: allNodes, totalCount };
 }
 
-export async function GET() {
+export async function getGitHubStars(): Promise<number | null> {
   try {
-    if (!process.env.GITHUB_PAT) {
-      return NextResponse.json(
-        { error: "Server misconfiguration" },
-        { status: 500 }
-      );
-    }
+    const res = await fetch("https://api.github.com/repos/jamierpond/yapi", {
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.stargazers_count;
+  } catch {
+    return null;
+  }
+}
 
-    const { nodes, totalCount } = await fetchAllReleases(process.env.GITHUB_PAT);
+export async function getTotalDownloads(): Promise<number | null> {
+  try {
+    const token = process.env.GITHUB_PAT;
+    if (!token) return null;
 
-    let totalDownloads = 0;
+    const { nodes } = await fetchAllReleases(token);
 
+    let total = 0;
     nodes.forEach((release) => {
       release.releaseAssets.nodes.forEach((asset) => {
-        if (asset.name === "checksums.txt") {
-          return;
+        if (asset.name !== "checksums.txt") {
+          total += asset.downloadCount;
         }
-        const realCount = Math.max(0, asset.downloadCount - 1);
-        totalDownloads += realCount;
       });
     });
 
-    return NextResponse.json({
-      total_downloads: totalDownloads,
-      total_releases: totalCount,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to calculate downloads" },
-      { status: 500 }
-    );
+    return total;
+  } catch {
+    return null;
   }
 }

@@ -6,15 +6,15 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"yapi.run/cli/internal/telemetry"
+	"yapi.run/cli/internal/observability"
 )
 
-// WrapWithTelemetry recursively wraps all commands with telemetry instrumentation.
-// This automatically captures command name, flags, args, timing, and success/failure.
-func WrapWithTelemetry(cmd *cobra.Command) {
+// WrapWithObservability recursively wraps all commands with observability instrumentation.
+// This automatically captures command name, flags used (not values), args count, timing, and success/failure.
+func WrapWithObservability(cmd *cobra.Command) {
 	// Recursively wrap all child commands first
 	for _, c := range cmd.Commands() {
-		WrapWithTelemetry(c)
+		WrapWithObservability(c)
 	}
 
 	// Skip noise commands (completion generates many internal calls)
@@ -40,15 +40,20 @@ func WrapWithTelemetry(cmd *cobra.Command) {
 	// Clear the Run field since we're using RunE
 	cmd.Run = nil
 
-	// Wrap with telemetry
+	// Wrap with observability
 	cmd.RunE = func(c *cobra.Command, args []string) error {
 		start := time.Now()
 
 		// Collect properties from flags
-		props := make(map[string]interface{})
+		props := make(map[string]any)
+
+		// Go vibe: Only record that the flag was used, NOT its value
+		// This avoids capturing sensitive data like URLs, tokens, etc.
 		cmd.Flags().Visit(func(f *pflag.Flag) {
-			props["flag_"+f.Name] = f.Value.String()
+			props["flag_used_"+f.Name] = true
 		})
+
+		// Only record args count, not the args themselves
 		props["args_count"] = len(args)
 
 		// Execute the original command
@@ -58,9 +63,10 @@ func WrapWithTelemetry(cmd *cobra.Command) {
 		props["duration_ms"] = time.Since(start).Milliseconds()
 		props["success"] = err == nil
 		if err != nil {
-			props["error"] = err.Error()
+			// Record error type, not the full message (which may contain sensitive paths)
+			props["has_error"] = true
 		}
-		telemetry.Track("cmd_"+cmd.Name(), props)
+		observability.Track("cmd_"+cmd.Name(), props)
 
 		return err
 	}

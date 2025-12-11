@@ -20,10 +20,10 @@ import (
 	"yapi.run/cli/internal/cli/middleware"
 	"yapi.run/cli/internal/core"
 	"yapi.run/cli/internal/langserver"
+	"yapi.run/cli/internal/observability"
 	"yapi.run/cli/internal/output"
 	"yapi.run/cli/internal/runner"
 	"yapi.run/cli/internal/share"
-	"yapi.run/cli/internal/telemetry"
 	"yapi.run/cli/internal/tui"
 	"yapi.run/cli/internal/validation"
 )
@@ -66,15 +66,12 @@ type rootCommand struct {
 }
 
 func main() {
-	// Show welcome prompt on first run (asks for telemetry consent)
-	telemetry.RunWelcome()
+	observability.Init(version, commit)
+	defer observability.Close()
 
-	telemetry.Init(version, commit)
-	defer telemetry.Close()
-
-	// Wire telemetry hook - main.go is the composition root
-	requestHook := func(stats map[string]interface{}) {
-		telemetry.Track("request_executed", stats)
+	// Wire observability hook - main.go is the composition root
+	requestHook := func(stats map[string]any) {
+		observability.Track("request_executed", stats)
 	}
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
@@ -94,7 +91,7 @@ func main() {
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			// Log command to history (skip meta commands)
 			switch cmd.Name() {
-			case "history", "version", "lsp", "help", "yapi":
+			case "history", "version", "lsp", "help", "yapi", "logging":
 				return
 			}
 			logHistoryCmd(reconstructCommand(cmd, args))
@@ -112,9 +109,10 @@ func main() {
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newValidateCmd())
 	rootCmd.AddCommand(newShareCmd())
+	rootCmd.AddCommand(newLoggingCmd())
 
-	// Wrap all commands with telemetry middleware
-	middleware.WrapWithTelemetry(rootCmd)
+	// Wrap all commands with observability middleware
+	middleware.WrapWithObservability(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, color.Red(err.Error()))
@@ -127,6 +125,8 @@ func (app *rootCommand) runInteractiveE(cmd *cobra.Command, args []string) error
 	if err != nil {
 		return fmt.Errorf("failed to select config file: %w", err)
 	}
+	absPath, _ := filepath.Abs(selectedPath)
+	logHistoryFromTUI(fmt.Sprintf("yapi run %q", absPath))
 	return app.runConfigPathE(selectedPath)
 }
 
@@ -160,6 +160,8 @@ func (app *rootCommand) newWatchCmd() *cobra.Command {
 					return fmt.Errorf("failed to select config file: %w", err)
 				}
 				path = selectedPath
+				absPath, _ := filepath.Abs(selectedPath)
+				logHistoryFromTUI(fmt.Sprintf("yapi watch %q", absPath))
 			} else {
 				path = args[0]
 			}
@@ -410,11 +412,11 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print version information",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if jsonOutput {
-				info := map[string]interface{}{
-					"version":   version,
-					"commit":    commit,
-					"date":      date,
-					"telemetry": telemetry.Enabled(),
+				info := map[string]any{
+					"version": version,
+					"commit":  commit,
+					"date":    date,
+					"logging": observability.IsEnabled(),
 				}
 				return json.NewEncoder(os.Stdout).Encode(info)
 			}
@@ -422,13 +424,6 @@ func newVersionCmd() *cobra.Command {
 			fmt.Printf("yapi %s\n", version)
 			fmt.Printf("  commit: %s\n", commit)
 			fmt.Printf("  built:  %s\n", date)
-			fmt.Println()
-			if telemetry.Enabled() {
-				fmt.Println("  telemetry: enabled")
-				fmt.Println("  disable with: export YAPI_NO_ANALYTICS=1")
-			} else {
-				fmt.Println("  telemetry: disabled")
-			}
 			return nil
 		},
 	}
@@ -682,7 +677,15 @@ func formatBytes(b int) string {
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "kMGTPE"[exp])
 }
 
+type historyEntry struct {
+	Timestamp string `json:"timestamp"`
+	Command   string `json:"command"`
+	FromTUI   bool   `json:"from_tui,omitempty"`
+}
+
 func newHistoryCmd() *cobra.Command {
+	var jsonOutput bool
+
 	cmd := &cobra.Command{
 		Use:   "history [count]",
 		Short: "Show yapi command history (default: last 10)",
@@ -696,13 +699,7 @@ func newHistoryCmd() *cobra.Command {
 				}
 			}
 
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get home directory: %w", err)
-			}
-
-			historyFile := filepath.Join(homeDir, ".yapi_history")
-			data, err := os.ReadFile(historyFile)
+			data, err := os.ReadFile(observability.HistoryFilePath)
 			if err != nil {
 				if os.IsNotExist(err) {
 					fmt.Println("No history yet")
@@ -722,31 +719,67 @@ func newHistoryCmd() *cobra.Command {
 				start = 0
 			}
 
-			for _, line := range lines[start:] {
-				fmt.Println(line)
+			entries := lines[start:]
+
+			if jsonOutput {
+				fmt.Println("[")
+				for i, line := range entries {
+					fmt.Print("  " + line)
+					if i < len(entries)-1 {
+						fmt.Println(",")
+					} else {
+						fmt.Println()
+					}
+				}
+				fmt.Println("]")
+				return nil
+			}
+
+			// Pretty print for humans
+			for _, line := range entries {
+				var entry historyEntry
+				if err := json.Unmarshal([]byte(line), &entry); err != nil {
+					continue
+				}
+				t, _ := time.Parse(time.RFC3339, entry.Timestamp)
+				fmt.Printf("%s  %s\n", color.Dim(t.Format("2006-01-02 15:04:05")), entry.Command)
 			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	return cmd
 }
 
-// logHistoryCmd writes a command string to history
+// logHistoryCmd writes a command to history as JSON
 func logHistoryCmd(cmdStr string) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
+	logHistoryEntry(cmdStr, false)
+}
+
+// logHistoryFromTUI writes a TUI-selected command to history
+func logHistoryFromTUI(cmdStr string) {
+	logHistoryEntry(cmdStr, true)
+}
+
+func logHistoryEntry(cmdStr string, fromTUI bool) {
+	if err := os.MkdirAll(observability.LogDir, 0755); err != nil {
 		return
 	}
 
-	historyFile := filepath.Join(homeDir, ".yapi_history")
-	f, err := os.OpenFile(historyFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(observability.HistoryFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
-	line := fmt.Sprintf("%d | %s\n", time.Now().Unix(), cmdStr)
-	f.WriteString(line)
+	entry := historyEntry{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Command:   cmdStr,
+		FromTUI:   fromTUI,
+	}
+	jsonBytes, _ := json.Marshal(entry)
+	fmt.Fprintln(f, string(jsonBytes))
 }
 
 // reconstructCommand builds the full command string from cobra command and args
@@ -778,4 +811,54 @@ func reconstructCommand(cmd *cobra.Command, args []string) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func newLoggingCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "logging [on|off|status]",
+		Short: "Manage local usage logging",
+		Long: `Manage local usage logging for yapi.
+
+Usage stats are written to ~/.yapi/` + observability.LogFileName + ` (nothing is uploaded).
+
+Examples:
+  yapi logging        Show current status
+  yapi logging on     Enable logging (default)
+  yapi logging off    Disable logging`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			action := "status"
+			if len(args) > 0 {
+				action = args[0]
+			}
+
+			switch action {
+			case "status":
+				if observability.IsEnabled() {
+					fmt.Println("Logging: " + color.Green("on"))
+					fmt.Printf("Log file: %s\n", observability.LogFilePath)
+				} else {
+					fmt.Println("Logging: " + color.Yellow("off"))
+				}
+
+			case "on":
+				if err := observability.SetEnabled(true); err != nil {
+					return fmt.Errorf("failed: %w", err)
+				}
+				fmt.Println(color.Green("Logging enabled."))
+				fmt.Printf("Log file: %s\n", observability.LogFilePath)
+
+			case "off":
+				if err := observability.SetEnabled(false); err != nil {
+					return fmt.Errorf("failed: %w", err)
+				}
+				fmt.Println(color.Yellow("Logging disabled."))
+
+			default:
+				return fmt.Errorf("unknown action: %s (use on, off, or status)", action)
+			}
+			return nil
+		},
+	}
+	return cmd
 }

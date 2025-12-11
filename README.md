@@ -2,6 +2,7 @@
 
 [![CLI](https://github.com/jamierpond/yapi/actions/workflows/cli.yml/badge.svg)](https://github.com/jamierpond/yapi/actions/workflows/cli.yml)
 [![Playground](https://yapi.run/badge.svg)](https://yapi.run/playground)
+[![Go Report Card](https://goreportcard.com/badge/yapi.run/cli)](https://goreportcard.com/report/yapi.run/cli)
 
 **The API client that lives in your terminal (and your git repo).**
 
@@ -222,6 +223,25 @@ yapi
 ```
 
 This launches the **Interactive TUI**. You can fuzzy-search through all your `.yapi.yml` files in the current directory (and subdirectories) and execute them instantly.
+
+### Shell History Integration
+
+For a richer CLI experience, source the yapi shell helper in your `.zshrc`:
+
+```bash
+# Add to ~/.zshrc
+YAPI_ZSH="/path/to/yapi/bin/yapi.zsh"  # or wherever you installed yapi
+[ -f "$YAPI_ZSH" ] && source "$YAPI_ZSH"
+
+# Optional: short alias
+alias a="yapi"
+```
+
+This enables:
+- **TUI commands in shell history**: When you use the interactive TUI to select a file, the equivalent CLI command is added to your shell history. Press `↑` to re-run it instantly.
+- **Seamless workflow**: Select interactively once, then repeat with up-arrow forever.
+
+> **Note:** Requires `jq` to be installed.
 
 ### 👀 Watch Mode
 

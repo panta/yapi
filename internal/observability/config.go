@@ -1,4 +1,4 @@
-package telemetry
+package observability
 
 import (
 	"encoding/json"
@@ -8,16 +8,16 @@ import (
 
 // UserConfig holds user preferences stored in ~/.config/yapi/config.json
 type UserConfig struct {
-	TelemetryEnabled *bool `json:"telemetry_enabled,omitempty"`
+	LoggingEnabled *bool `json:"logging_enabled,omitempty"`
 }
 
-// yapiConfigDir returns the yapi config directory (~/.config/yapi)
+// yapiConfigDir returns the yapi config directory (~/.yapi)
 func yapiConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "yapi"), nil
+	return filepath.Join(home, ".yapi"), nil
 }
 
 // configPath returns the path to the user config file
@@ -46,7 +46,7 @@ func LoadUserConfig() (*UserConfig, error) {
 
 	var cfg UserConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return &UserConfig{}, nil // Return empty config on parse error
+		return &UserConfig{}, nil
 	}
 
 	return &cfg, nil
@@ -59,7 +59,6 @@ func SaveUserConfig(cfg *UserConfig) error {
 		return err
 	}
 
-	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
@@ -72,32 +71,21 @@ func SaveUserConfig(cfg *UserConfig) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// IsFirstRun returns true if this is the first time yapi is being run
-// (no config file exists and telemetry preference hasn't been set)
-func IsFirstRun() bool {
+// IsEnabled returns true if logging is enabled (default: true)
+func IsEnabled() bool {
 	cfg, err := LoadUserConfig()
-	if err != nil {
-		return true
+	if err != nil || cfg.LoggingEnabled == nil {
+		return true // Default to enabled
 	}
-	return cfg.TelemetryEnabled == nil
+	return *cfg.LoggingEnabled
 }
 
-// SetTelemetryEnabled saves the user's telemetry preference
-func SetTelemetryEnabled(enabled bool) error {
+// SetEnabled saves the logging preference
+func SetEnabled(enabled bool) error {
 	cfg, err := LoadUserConfig()
 	if err != nil {
 		cfg = &UserConfig{}
 	}
-	cfg.TelemetryEnabled = &enabled
+	cfg.LoggingEnabled = &enabled
 	return SaveUserConfig(cfg)
-}
-
-// GetTelemetryPreference returns the user's telemetry preference.
-// Returns nil if not yet set (first run).
-func GetTelemetryPreference() *bool {
-	cfg, err := LoadUserConfig()
-	if err != nil {
-		return nil
-	}
-	return cfg.TelemetryEnabled
 }
