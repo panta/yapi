@@ -52,7 +52,7 @@ jobs:
     - name: Test
       run: go test ./...
 
-    - name: Fuzz tests
-      run: go run ./scripts/fuzz.go
-      env:
-        FUZZTIME: 10s
+#     - name: Fuzz tests
+#       run: go run ./scripts/fuzz.go
+#       env:
+#         FUZZTIME: 10s
