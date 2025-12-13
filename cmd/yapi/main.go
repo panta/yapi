@@ -91,7 +91,7 @@ func main() {
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			// Log command to history (skip meta commands)
 			switch cmd.Name() {
-			case "history", "version", "lsp", "help", "yapi", "logging":
+			case "history", "version", "lsp", "help", "yapi":
 				return
 			}
 			logHistoryCmd(reconstructCommand(cmd, args))
@@ -109,7 +109,6 @@ func main() {
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newValidateCmd())
 	rootCmd.AddCommand(newShareCmd())
-	rootCmd.AddCommand(newLoggingCmd())
 
 	// Wrap all commands with observability middleware
 	middleware.WrapWithObservability(rootCmd)
@@ -261,7 +260,7 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 
 	// Check if this is a chain config
 	if runRes.Analysis != nil && len(runRes.Analysis.Chain) > 0 {
-		chainResult, chainErr := app.engine.RunChain(context.Background(), runRes.Analysis.Base, runRes.Analysis.Chain, opts)
+		chainResult, chainErr := app.engine.RunChain(context.Background(), runRes.Analysis.Base, runRes.Analysis.Chain, opts, runRes.Analysis)
 
 		// Print results from all completed steps (even if chain failed)
 		if chainResult != nil {
@@ -354,7 +353,7 @@ func (app *rootCommand) printDiagnostics(
 		if !filter(d) {
 			continue
 		}
-		fmt.Fprintln(out, formatDiagnostic(d))
+		_, _ = fmt.Fprintln(out, formatDiagnostic(d))
 	}
 }
 
@@ -375,7 +374,7 @@ func (app *rootCommand) printWarnings(a *validation.Analysis, strict bool) {
 	}
 
 	for _, w := range a.Warnings {
-		fmt.Fprintln(out, color.Yellow("[WARN] "+w))
+		_, _ = fmt.Fprintln(out, color.Yellow("[WARN] "+w))
 	}
 
 	app.printDiagnostics(a, strict, func(d validation.Diagnostic) bool {
@@ -416,7 +415,6 @@ func newVersionCmd() *cobra.Command {
 					"version": version,
 					"commit":  commit,
 					"date":    date,
-					"logging": observability.IsEnabled(),
 				}
 				return json.NewEncoder(os.Stdout).Encode(info)
 			}
@@ -476,7 +474,7 @@ func newValidateCmd() *cobra.Command {
 			}
 
 			if jsonOutput {
-				json.NewEncoder(os.Stdout).Encode(analysis.ToJSON())
+				_ = json.NewEncoder(os.Stdout).Encode(analysis.ToJSON())
 				return nil
 			}
 
@@ -500,7 +498,7 @@ func outputValidateError(err error) {
 		}},
 		Warnings: []string{},
 	}
-	json.NewEncoder(os.Stdout).Encode(out)
+	_ = json.NewEncoder(os.Stdout).Encode(out)
 }
 
 func outputValidateText(analysis *validation.Analysis) error {
@@ -533,7 +531,7 @@ func newShareCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filename := args[0]
-			data, err := os.ReadFile(filename)
+			data, err := os.ReadFile(filename) //nolint:gosec // user-provided file path
 			if err != nil {
 				return fmt.Errorf("failed to read file: %w", err)
 			}
@@ -678,9 +676,17 @@ func formatBytes(b int) string {
 }
 
 type historyEntry struct {
-	Timestamp string `json:"timestamp"`
-	Command   string `json:"command"`
-	FromTUI   bool   `json:"from_tui,omitempty"`
+	Timestamp string   `json:"timestamp"`
+	Event     string   `json:"event,omitempty"`  // legacy single event
+	Events    []string `json:"events,omitempty"` // new merged events
+	Command   string   `json:"command,omitempty"`
+	FromTUI   bool     `json:"from_tui,omitempty"`
+	// Fields from request tracking
+	OS      string         `json:"os,omitempty"`
+	Arch    string         `json:"arch,omitempty"`
+	Version string         `json:"version,omitempty"`
+	Commit  string         `json:"commit,omitempty"`
+	Props   map[string]any `json:"-"` // For parsing additional fields
 }
 
 func newHistoryCmd() *cobra.Command {
@@ -742,7 +748,27 @@ func newHistoryCmd() *cobra.Command {
 					continue
 				}
 				t, _ := time.Parse(time.RFC3339, entry.Timestamp)
-				fmt.Printf("%s  %s\n", color.Dim(t.Format("2006-01-02 15:04:05")), entry.Command)
+				timeStr := color.Dim(t.Format("2006-01-02 15:04:05"))
+
+				// New merged format has Command field directly
+				if entry.Command != "" {
+					fmt.Printf("%s  %s\n", timeStr, entry.Command)
+					continue
+				}
+
+				// Legacy: request_executed entries had method/url
+				if entry.Event == "request_executed" {
+					var raw map[string]any
+					if err := json.Unmarshal([]byte(line), &raw); err == nil {
+						method, _ := raw["method"].(string)
+						url, _ := raw["url"].(string)
+						status, _ := raw["status_code"].(float64)
+						if method != "" && url != "" {
+							fmt.Printf("%s  %s %s %s\n", timeStr, color.Cyan(method), url, color.Dim(fmt.Sprintf("[%d]", int(status))))
+							continue
+						}
+					}
+				}
 			}
 			return nil
 		},
@@ -763,23 +789,13 @@ func logHistoryFromTUI(cmdStr string) {
 }
 
 func logHistoryEntry(cmdStr string, fromTUI bool) {
-	if err := os.MkdirAll(observability.LogDir, 0755); err != nil {
-		return
+	props := map[string]any{
+		"command": cmdStr,
 	}
-
-	f, err := os.OpenFile(observability.HistoryFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
+	if fromTUI {
+		props["from_tui"] = true
 	}
-	defer f.Close()
-
-	entry := historyEntry{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Command:   cmdStr,
-		FromTUI:   fromTUI,
-	}
-	jsonBytes, _ := json.Marshal(entry)
-	fmt.Fprintln(f, string(jsonBytes))
+	observability.Track("command", props)
 }
 
 // reconstructCommand builds the full command string from cobra command and args
@@ -811,54 +827,4 @@ func reconstructCommand(cmd *cobra.Command, args []string) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func newLoggingCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "logging [on|off|status]",
-		Short: "Manage local usage logging",
-		Long: `Manage local usage logging for yapi.
-
-Usage stats are written to ~/.yapi/` + observability.LogFileName + ` (nothing is uploaded).
-
-Examples:
-  yapi logging        Show current status
-  yapi logging on     Enable logging (default)
-  yapi logging off    Disable logging`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			action := "status"
-			if len(args) > 0 {
-				action = args[0]
-			}
-
-			switch action {
-			case "status":
-				if observability.IsEnabled() {
-					fmt.Println("Logging: " + color.Green("on"))
-					fmt.Printf("Log file: %s\n", observability.LogFilePath)
-				} else {
-					fmt.Println("Logging: " + color.Yellow("off"))
-				}
-
-			case "on":
-				if err := observability.SetEnabled(true); err != nil {
-					return fmt.Errorf("failed: %w", err)
-				}
-				fmt.Println(color.Green("Logging enabled."))
-				fmt.Printf("Log file: %s\n", observability.LogFilePath)
-
-			case "off":
-				if err := observability.SetEnabled(false); err != nil {
-					return fmt.Errorf("failed: %w", err)
-				}
-				fmt.Println(color.Yellow("Logging disabled."))
-
-			default:
-				return fmt.Errorf("unknown action: %s (use on, off, or status)", action)
-			}
-			return nil
-		},
-	}
-	return cmd
 }

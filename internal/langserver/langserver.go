@@ -1,3 +1,4 @@
+// Package langserver implements an LSP server for yapi config files.
 package langserver
 
 import (
@@ -29,6 +30,7 @@ type document struct {
 	Text string
 }
 
+// Run starts the yapi language server over stdio.
 func Run() {
 	commonlog.Configure(1, nil)
 
@@ -46,7 +48,7 @@ func Run() {
 	}
 
 	srv := server.NewServer(&handler, lsName, false)
-	srv.RunStdio()
+	_ = srv.RunStdio()
 }
 
 func initialize(ctx *glsp.Context, params *protocol.InitializeParams) (any, error) {

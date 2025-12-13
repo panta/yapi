@@ -41,7 +41,7 @@ func GRPCTransport(ctx context.Context, req *domain.Request) (*domain.Response, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial gRPC target %s: %w", target, err)
 	}
-	defer cc.Close()
+	defer func() { _ = cc.Close() }()
 
 	// Determine descriptor source
 	var descSource grpcurl.DescriptorSource
@@ -49,11 +49,11 @@ func GRPCTransport(ctx context.Context, req *domain.Request) (*domain.Response, 
 		// TODO: Handle proto and proto_path. For now, we focus on reflection.
 		_ = protoPath // Avoid unused variable error
 		return nil, fmt.Errorf("proto file support not yet implemented")
-	} else {
-		// Use server reflection
-		refClient := grpcreflect.NewClient(ctx, grpc_reflection_v1alpha.NewServerReflectionClient(cc))
-		descSource = grpcurl.DescriptorSourceFromServer(ctx, refClient)
 	}
+
+	// Use server reflection
+	refClient := grpcreflect.NewClient(ctx, grpc_reflection_v1alpha.NewServerReflectionClient(cc))
+	descSource = grpcurl.DescriptorSourceFromServer(ctx, refClient)
 
 	// Prepare request payload
 	var reqData []byte

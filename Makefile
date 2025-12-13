@@ -1,4 +1,4 @@
-.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all
+.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all lint lint-install lint-quick lint-full
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -6,9 +6,6 @@ COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
-fuzz-cover:
-	@go test ./... -run=Fuzz -coverprofile=fuzz.cov
-	@go tool cover -func=fuzz.cov
 
 
 install: build
@@ -17,9 +14,35 @@ install: build
 	@codesign --sign - --force $$(go env GOPATH)/bin/yapi 2>/dev/null || true
 	@echo "Done! Ensure $$(go env GOPATH)/bin is in your PATH."
 
+fuzz-cover:
+	@go test ./... -run=Fuzz -coverprofile=fuzz.cov
+	@go tool cover -func=fuzz.cov
+
+# Install linting tools
+lint-install:
+	@echo "Installing linting tools..."
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+	go install golang.org/x/tools/cmd/deadcode@latest
+	go install golang.org/x/vuln/cmd/govulncheck@latest
+
+# Quick lint (go vet + fmt check)
+lint-quick:
+	@echo "Running go vet..."
+	@go vet ./...
+	@echo "Checking gofmt..."
+	@test -z "$$(gofmt -s -l cmd internal)" || (echo "Files need formatting:"; gofmt -s -l cmd internal; exit 1)
+
+# Standard lint (golangci-lint with all enabled linters)
 lint:
-	@echo "Running deadcode analysis..."
+	@echo "Running golangci-lint..."
+	@golangci-lint run ./...
+	@echo "Running deadcode..."
 	@deadcode ./...
+
+# Full lint (includes vulnerability check)
+lint-full: lint
+	@echo "Running govulncheck..."
+	@govulncheck ./...
 
 build:
 	@echo "Building yapi CLI..."

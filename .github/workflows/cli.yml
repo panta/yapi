@@ -22,6 +22,24 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache-dependency-path: go.sum
+
+    - name: Install linters
+      run: make lint-install
+
+    - name: Run lint
+      run: make lint
+
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -35,7 +53,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
+        go-version: '1.25'
         cache-dependency-path: go.sum
 
     - name: Download dependencies

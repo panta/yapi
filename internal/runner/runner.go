@@ -1,3 +1,4 @@
+// Package runner executes API requests and chains.
 package runner
 
 import (
@@ -46,7 +47,7 @@ func Run(ctx context.Context, exec executor.TransportFunc, req *domain.Request, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
