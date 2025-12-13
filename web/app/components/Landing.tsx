@@ -6,10 +6,11 @@ import { getTotalDownloads } from "@/app/lib/github";
 
 async function getStats() {
   try {
+    const FIVE_MINUTES_MS = 300;
     const [totalDownloads, releasesRes] = await Promise.all([
       getTotalDownloads(),
       fetch("https://api.github.com/repos/jamierpond/yapi/releases/latest", {
-        next: { revalidate: 3600 },
+        next: { revalidate: FIVE_MINUTES_MS },
       }),
     ]);
 
