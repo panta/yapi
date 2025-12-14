@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { generateBlogSitemap } from "madea-blog-core";
-import { LocalFsDataProvider } from "madea-blog-core/providers/local-fs";
-import path from "path";
+import { blogDataProvider } from "./blog/madea.config";
+import { docsDataProvider } from "./docs/madea.config";
 
 const BASE_URL = "https://yapi.run";
 
@@ -21,16 +21,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  // Generate blog sitemap entries
-  const dataProvider = new LocalFsDataProvider({
-    contentDir: path.join(process.cwd(), "app/blog/_content"),
-    authorName: "yapi",
-  });
-
-  const blogEntries = await generateBlogSitemap(dataProvider, {
+  const blogEntries = await generateBlogSitemap(blogDataProvider, {
     baseUrl: BASE_URL,
     blogPath: "/blog",
   });
 
-  return [...staticPages, ...blogEntries];
+  const docsEntries = await generateBlogSitemap(docsDataProvider, {
+    baseUrl: BASE_URL,
+    blogPath: "/docs",
+  });
+
+  return [...staticPages, ...blogEntries, ...docsEntries];
 }
