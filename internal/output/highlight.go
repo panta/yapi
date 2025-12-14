@@ -3,10 +3,9 @@ package output
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
-
-	"yapi.run/cli/internal/filter"
 
 	"codeberg.org/derat/htmlpretty"
 	"github.com/alecthomas/chroma/v2"
@@ -111,15 +110,28 @@ func prettyPrint(raw string, lang string) string {
 	}
 }
 
-// prettyPrintJSON formats JSON with indentation using jq's identity filter.
+// prettyPrintJSON formats JSON with indentation.
+// Handles multiple JSON objects in a stream (common jq output).
 func prettyPrintJSON(raw string) string {
-	// Use jq with identity filter "." to pretty-print JSON
-	result, err := filter.ApplyJQ(raw, ".")
-	if err != nil {
-		// If it's not valid JSON, return as-is
-		return raw
+	dec := json.NewDecoder(strings.NewReader(raw))
+	var results []string
+
+	for {
+		var v any
+		if err := dec.Decode(&v); err != nil {
+			break
+		}
+
+		pretty, _ := json.MarshalIndent(v, "", "  ")
+		results = append(results, string(pretty))
 	}
-	return result
+
+	if len(results) > 0 {
+		return strings.Join(results, "\n")
+	}
+
+	// Fall back to raw if nothing parsed
+	return raw
 }
 
 // prettyPrintHTML formats HTML using htmlpretty.
