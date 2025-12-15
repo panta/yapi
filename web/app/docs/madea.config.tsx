@@ -1,27 +1,62 @@
 import type {
-  Config,
+  MadeaConfigWithSeo,
   ArticleViewProps,
   FileBrowserViewProps,
   FileInfo,
 } from "madea-blog-core";
 import { LocalFsDataProvider } from "madea-blog-core/providers/local-fs";
+import { generateMetadataForIndex, generateMetadataForArticle } from "madea-blog-core";
 import Link from "next/link";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import path from "path";
 import fs from "fs";
+import { execSync } from "child_process";
+
+// Get version info at build time (uses Vercel env vars, falls back to git for local dev)
+function getVersionInfo(): { semver: string; commit: string } {
+  // Vercel provides VERCEL_GIT_COMMIT_SHA
+  const commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7)
+    ?? tryExec("git rev-parse --short HEAD")
+    ?? "unknown";
+
+  // For semver, try git tags (Vercel doesn't provide this)
+  const tag = tryExec("git describe --tags --abbrev=0") ?? "0.0.0";
+  const semver = tag.replace(/^v/, "");
+
+  return { semver, commit };
+}
+
+function tryExec(cmd: string): string | null {
+  try {
+    const repoRoot = path.join(process.cwd(), "..");
+    return execSync(cmd, { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+const versionInfo = getVersionInfo();
+
+function VersionFooter() {
+  return (
+    <p className="text-sm text-yapi-fg-muted">
+      Docs generated from{" "}
+      <a
+        href={`https://github.com/jamierpond/yapi/tree/${versionInfo.commit}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-yapi-accent hover:underline"
+      >
+        yapi v{versionInfo.semver}-{versionInfo.commit}
+      </a>
+    </p>
+  );
+}
+
 import Navbar from "@/app/components/Navbar";
 import "highlight.js/styles/github-dark.css";
-
-// Strip ## title from doc content (docs use h2 for titles, not h1)
-function stripDocTitle(content: string): string {
-  const lines = content.split('\n');
-  if (lines.length > 0 && lines[0].startsWith('## ')) {
-    return lines.slice(1).join('\n').trimStart();
-  }
-  return content;
-}
 
 function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -70,8 +105,12 @@ function ArticleView({ article }: ArticleViewProps) {
         </header>
 
         <div className="prose prose-invert prose-lg max-w-none prose-headings:text-yapi-fg prose-headings:font-bold prose-p:text-yapi-fg-muted prose-a:text-yapi-accent prose-a:no-underline hover:prose-a:underline prose-strong:text-yapi-fg prose-code:text-yapi-accent prose-code:bg-yapi-bg-elevated prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[#1e1e1e] prose-pre:border prose-pre:border-yapi-border prose-blockquote:border-l-yapi-accent prose-blockquote:text-yapi-fg-muted prose-li:text-yapi-fg-muted prose-li:marker:text-yapi-accent">
-          <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{stripDocTitle(article.content)}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{article.content}</Markdown>
         </div>
+
+        <footer className="mt-16 pt-8 border-t border-yapi-border">
+          <VersionFooter />
+        </footer>
       </article>
     </DocsLayout>
   );
@@ -103,9 +142,10 @@ function FileBrowserView({ articles }: FileBrowserViewProps) {
               CLI Documentation
             </span>
           </h1>
-          <p className="text-xl text-yapi-fg-muted max-w-xl mx-auto mb-6">
+          <p className="text-xl text-yapi-fg-muted max-w-xl mx-auto mb-4">
             Auto-generated documentation for yapi CLI commands
           </p>
+          <VersionFooter />
         </header>
 
         {articles.length === 0 ? (
@@ -182,7 +222,19 @@ export const docsDataProvider = new LocalFsDataProvider({
   sourceUrl: "https://github.com/jamierpond/yapi",
 });
 
-export function createDocsConfig(): Config {
+import { OG_BASE_URL } from "@/app/lib/constants";
+
+const BASE_URL = "https://yapi.run";
+
+const SEO_CONFIG = {
+  baseUrl: BASE_URL,
+  siteName: "yapi",
+  defaultDescription: "CLI documentation for yapi - the API development toolkit",
+  authorName: "yapi",
+  authorUrl: BASE_URL,
+} as const;
+
+export function createDocsConfig(): MadeaConfigWithSeo {
   return {
     dataProvider: docsDataProvider,
     username: "yapi",
@@ -190,5 +242,42 @@ export function createDocsConfig(): Config {
     articleView: ArticleView,
     noRepoFoundView: NoRepoFoundView,
     landingView: LandingView,
+    seo: SEO_CONFIG,
+    basePath: "/docs",
+  };
+}
+
+// Re-export helpers bound to config for use in pages
+export async function generateDocsMetadata() {
+  const config = createDocsConfig();
+  const metadata = await generateMetadataForIndex(config, {
+    title: "CLI Documentation | yapi",
+    description: "Auto-generated documentation for yapi CLI commands",
+  });
+  return {
+    ...metadata,
+    openGraph: {
+      ...metadata.openGraph,
+      images: [`${OG_BASE_URL}/og/docs?title=${encodeURIComponent("CLI Documentation")}`],
+    },
+  };
+}
+
+export async function generateDocsArticleMetadata(slug: string[]) {
+  const config = createDocsConfig();
+  const metadata = await generateMetadataForArticle(config, slug);
+  const title =
+    (metadata?.title && typeof metadata.title === "string"
+      ? metadata.title
+      : null) ?? slug.join("/");
+
+  return {
+    ...metadata,
+    title,
+    openGraph: {
+      ...metadata?.openGraph,
+      title,
+      images: [`${OG_BASE_URL}/og/docs?title=${encodeURIComponent(title)}`],
+    },
   };
 }
