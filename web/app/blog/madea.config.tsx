@@ -4,13 +4,12 @@ import type {
   FileBrowserViewProps,
   FileInfo,
 } from "madea-blog-core";
-import { generateArticleJsonLd, generateMetadataForIndex, generateMetadataForArticle } from "madea-blog-core";
+import { generateArticleJsonLd, generateMetadataForIndex, generateMetadataForArticle, stripTitle } from "madea-blog-core";
 import { GitHubDataProvider } from "madea-blog-core/providers/github"
 import Link from "next/link";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import path from "path";
 import Navbar from "@/app/components/Navbar";
 import "highlight.js/styles/github-dark.css";
 
@@ -113,7 +112,7 @@ function ArticleView({ article }: ArticleViewProps) {
         </header>
 
         <div className="prose prose-invert prose-lg max-w-none prose-headings:text-yapi-fg prose-headings:font-bold prose-p:text-yapi-fg-muted prose-a:text-yapi-accent prose-a:no-underline hover:prose-a:underline prose-strong:text-yapi-fg prose-code:text-yapi-accent prose-code:bg-yapi-bg-elevated prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[#1e1e1e] prose-pre:border prose-pre:border-yapi-border prose-blockquote:border-l-yapi-accent prose-blockquote:text-yapi-fg-muted prose-li:text-yapi-fg-muted prose-li:marker:text-yapi-accent">
-          <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{article.content}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{stripTitle(article.content)}</Markdown>
         </div>
       </article>
     </BlogLayout>
@@ -275,7 +274,7 @@ export function createBlogConfig(): MadeaConfigWithSeo {
 // Re-export helpers bound to config for use in pages
 export async function generateBlogMetadata() {
   const config = createBlogConfig();
-  const metadata = await generateMetadataForIndex(config, {
+  const metadata = generateMetadataForIndex(config, {
     title: "Blog | yapi",
     description: "Updates, tutorials, and thoughts about yapi",
   });
