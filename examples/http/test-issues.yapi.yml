@@ -1,0 +1,11 @@
+yapi: v1
+method: GET
+url: https://api.github.com/repos/jamierpond/yapi/issues/1
+headers:
+    Accept: application/vnd.github+json
+expect:
+    status: 200
+    assert:
+      - .body.title == "Help! yapi made me too productive."
+      - .body.state == "open"
+

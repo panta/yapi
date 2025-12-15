@@ -1,0 +1,15 @@
+# create-issue.yapi.yml
+yapi: v1 # specify yapi version
+method: POST # or GET, PUT, DELETE, PATCH, etc.
+url: https://api.github.com/repos/jamierpond/yapi/issues
+headers:
+  Accept: application/vnd.github+json
+  Authorization: Bearer ${GITHUB_PAT} # supports environment variables
+body: # defaults to JSON body, converted automatically
+  title: Help yapi made me too productive.
+  body: Now I can't stop YAPPIN' about yapi!
+expect: # supports expected response tests
+  status: 201
+  assert: # assert using jq syntax
+    - .body == "Now I can't stop YAPPIN' about yapi!"
+

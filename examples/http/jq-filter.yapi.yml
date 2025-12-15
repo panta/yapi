@@ -1,6 +1,16 @@
 yapi: v1
-# Using jq to filter response data
-url: https://jsonplaceholder.typicode.com/users
+chain:
+  - name: get_todo
+    url: https://jsonplaceholder.typicode.com/todos/1
+    method: GET
 
-# Extract just names and emails
-jq_filter: "[.[] | {name, email}]"
+  - name: grpc_hello
+    url: grpc://grpcb.in:9000
+    service: hello.HelloService
+    rpc: SayHello
+    plaintext: true
+    body:
+      greeting: $get_todo.title
+    expect:
+      assert:
+        - .reply == "hello delectus aut autem"
