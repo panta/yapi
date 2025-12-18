@@ -1,0 +1,18 @@
+yapi: v1
+url: https://jsonplaceholder.typicode.com
+
+chain:
+  - name: get_user
+    path: /users/1
+    output_file: ./user.json
+
+  - name: get_user_posts
+    path: /users/${get_user.id}/posts
+    output_file: ./user-${get_user.id}-posts.json
+    jq_filter: "."
+
+# This example demonstrates:
+# 1. Using output_file in chain steps to save each response
+# 2. Variable interpolation in output_file paths (user-${get_user.id}-posts.json)
+# 3. Combining output_file with jq_filter to save filtered results
+# 4. The output_file path can reference variables from previous steps
