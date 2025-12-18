@@ -237,8 +237,8 @@ func FuzzEvalJQBool(f *testing.F) {
 	f.Add(`{"name": "test"}`, `.name == "test"`)
 
 	f.Fuzz(func(t *testing.T, input string, expr string) {
-		// EvalJQBool should not panic on any input
-		_, _ = EvalJQBool(input, expr)
+		// EvalJQBoolWithDetail should not panic on any input
+		_, _, _ = EvalJQBoolWithDetail(input, expr)
 	})
 }
 

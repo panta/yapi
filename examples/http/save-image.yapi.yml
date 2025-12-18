@@ -1,0 +1,5 @@
+yapi: v1
+url: https://pond.audio/pup.jpg
+method: GET
+output_file: ./pup.jpg
+

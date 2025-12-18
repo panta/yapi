@@ -31,8 +31,9 @@ type Result struct {
 
 // Options for execution
 type Options struct {
-	URLOverride string
-	NoColor     bool
+	URLOverride  string
+	NoColor      bool
+	BinaryOutput bool
 }
 
 // Run executes a yapi request and returns the result.
@@ -62,6 +63,13 @@ func Run(ctx context.Context, exec executor.TransportFunc, req *domain.Request, 
 			return nil, fmt.Errorf("jq filter failed: %w", err)
 		}
 		resp.Headers["Content-Type"] = "application/json"
+	}
+
+	// Write to output file if specified
+	if outputFile, ok := req.Metadata["output_file"]; ok && outputFile != "" {
+		if err := os.WriteFile(outputFile, []byte(body), 0600); err != nil {
+			return nil, fmt.Errorf("failed to write output file '%s': %w", outputFile, err)
+		}
 	}
 
 	bodyLines := strings.Count(body, "\n") + 1
@@ -257,6 +265,15 @@ func interpolateConfig(chainCtx *ChainContext, cfg *config.ConfigV1) (*config.Co
 			return nil, fmt.Errorf("delay: %w", err)
 		}
 		result.Delay = expanded
+	}
+
+	// Interpolate OutputFile
+	if result.OutputFile != "" {
+		expanded, err := chainCtx.ExpandVariables(result.OutputFile)
+		if err != nil {
+			return nil, fmt.Errorf("output_file: %w", err)
+		}
+		result.OutputFile = expanded
 	}
 
 	return &result, nil

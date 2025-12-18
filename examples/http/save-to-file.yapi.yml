@@ -1,0 +1,11 @@
+yapi: v1
+url: https://jsonplaceholder.typicode.com/users/1
+method: GET
+output_file: ./user-data.json
+
+# The output_file field saves the response body to the specified file path.
+# - Supports relative paths (./output.json) and absolute paths (/tmp/output.json)
+# - Works with environment variables: $HOME/output.json or ${OUTPUT_DIR}/file.json
+# - In chains, supports variable interpolation: ./user-${user_id}.json
+# - The response is still printed to stdout in addition to being saved to the file
+# - Useful for saving images, binary data, or large JSON responses

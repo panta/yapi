@@ -44,6 +44,7 @@ var knownV1Keys = map[string]bool{
 	"chain":            true,
 	"expect":           true,
 	"delay":            true,
+	"output_file":      true,
 }
 
 // FindUnknownKeys checks a raw map for keys not in knownV1Keys.
@@ -88,6 +89,9 @@ type ConfigV1 struct {
 	// Flow control
 	Delay string `yaml:"delay,omitempty"` // Wait before executing this step (e.g. "5s", "500ms")
 
+	// Output
+	OutputFile string `yaml:"output_file,omitempty"` // Save response to file (e.g. "./output.json", "./image.png")
+
 	// Expect defines assertions to run after the request
 	Expect Expectation `yaml:"expect,omitempty"`
 
@@ -124,6 +128,7 @@ func (c *ConfigV1) Merge(step ChainStep) ConfigV1 {
 	m.Encoding = utils.Coalesce(step.Encoding, c.Encoding)
 	m.JQFilter = utils.Coalesce(step.JQFilter, c.JQFilter)
 	m.Delay = utils.Coalesce(step.Delay, c.Delay)
+	m.OutputFile = utils.Coalesce(step.OutputFile, c.OutputFile)
 
 	// Bool/Int overrides
 	if step.Insecure {
@@ -202,10 +207,11 @@ func (c *ConfigV1) ToDomain() (*domain.Request, error) {
 	return req, nil
 }
 
-// expandEnvVars expands environment variables in URL, Path, Headers, and Query
+// expandEnvVars expands environment variables in URL, Path, Headers, Query, and OutputFile
 func (c *ConfigV1) expandEnvVars() {
 	c.URL = os.ExpandEnv(c.URL)
 	c.Path = os.ExpandEnv(c.Path)
+	c.OutputFile = os.ExpandEnv(c.OutputFile)
 	c.Headers = expandMapEnv(c.Headers)
 	c.Query = expandMapEnv(c.Query)
 }
@@ -310,6 +316,10 @@ func (c *ConfigV1) enrichMetadata(req *domain.Request) error {
 
 	if c.JQFilter != "" {
 		req.Metadata["jq_filter"] = c.JQFilter
+	}
+
+	if c.OutputFile != "" {
+		req.Metadata["output_file"] = c.OutputFile
 	}
 
 	if c.Graphql != "" {

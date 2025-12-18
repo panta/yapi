@@ -70,3 +70,61 @@ func DeepCloneSlice(src []any) []any {
 	}
 	return dst
 }
+
+// IsBinaryContent checks if the given content appears to be binary data.
+// It uses a simple heuristic: if the content contains null bytes or has
+// a high percentage of non-printable characters, it's likely binary.
+// Note: Valid UTF-8 text (including emojis) is considered text, not binary.
+func IsBinaryContent(content string) bool {
+	if len(content) == 0 {
+		return false
+	}
+
+	// Check for null bytes - strong indicator of binary content
+	for i := 0; i < len(content); i++ {
+		if content[i] == 0 {
+			return true
+		}
+	}
+
+	// Sample first 8KB or the entire content, whichever is smaller
+	sampleSize := 8192
+	if len(content) < sampleSize {
+		sampleSize = len(content)
+	}
+
+	nonPrintable := 0
+	nonASCII := 0
+	for i := 0; i < sampleSize; i++ {
+		c := content[i]
+		// Count non-printable ASCII characters (excluding common whitespace)
+		if c < 32 && c != '\t' && c != '\n' && c != '\r' {
+			nonPrintable++
+		} else if c > 127 {
+			// High bytes - could be UTF-8 or binary
+			nonASCII++
+		}
+	}
+
+	// If more than 30% of sampled bytes are non-printable control chars, it's binary
+	// This catches things like binary files with lots of control characters
+	if float64(nonPrintable) > float64(sampleSize)*0.3 {
+		return true
+	}
+
+	// If we have high bytes, determine if it's UTF-8 text or binary
+	if nonASCII > 0 {
+		// If there are control chars mixed with high bytes, it's likely binary
+		if nonPrintable > sampleSize/20 { // More than 5% control characters = binary
+			return true
+		}
+
+		// If more than 80% of the content is non-ASCII, it's likely binary
+		// (UTF-8 text rarely has that high a ratio unless it's pure emoji/CJK)
+		if float64(nonASCII) > float64(sampleSize)*0.8 {
+			return true
+		}
+	}
+
+	return false
+}
