@@ -241,3 +241,326 @@ func FuzzEvalJQBool(f *testing.F) {
 		_, _ = EvalJQBool(input, expr)
 	})
 }
+
+func TestEvalJQBoolWithDetail(t *testing.T) {
+	tests := []struct {
+		name              string
+		input             string
+		expr              string
+		wantPassed        bool
+		wantErr           bool
+		wantLeftSide      string
+		wantOperator      string
+		wantRightSide     string
+		wantActualValue   string
+		wantExpectedValue string
+	}{
+		{
+			name:              "simple equality - pass",
+			input:             `{"id": 1}`,
+			expr:              ".id == 1",
+			wantPassed:        true,
+			wantLeftSide:      ".id",
+			wantOperator:      "==",
+			wantRightSide:     "1",
+			wantActualValue:   "1",
+			wantExpectedValue: "1",
+		},
+		{
+			name:              "simple equality - fail",
+			input:             `{"id": 1}`,
+			expr:              ".id == 999",
+			wantPassed:        false,
+			wantLeftSide:      ".id",
+			wantOperator:      "==",
+			wantRightSide:     "999",
+			wantActualValue:   "1",
+			wantExpectedValue: "999",
+		},
+		{
+			name:              "not equal - pass",
+			input:             `{"userId": 1}`,
+			expr:              ".userId != null",
+			wantPassed:        true,
+			wantLeftSide:      ".userId",
+			wantOperator:      "!=",
+			wantRightSide:     "null",
+			wantActualValue:   "1",
+			wantExpectedValue: "null",
+		},
+		{
+			name:              "not equal - fail",
+			input:             `{"userId": 1}`,
+			expr:              ".userId != 1",
+			wantPassed:        false,
+			wantLeftSide:      ".userId",
+			wantOperator:      "!=",
+			wantRightSide:     "1",
+			wantActualValue:   "1",
+			wantExpectedValue: "1",
+		},
+		{
+			name:              "greater than - pass",
+			input:             `{"count": 10}`,
+			expr:              ".count > 5",
+			wantPassed:        true,
+			wantLeftSide:      ".count",
+			wantOperator:      ">",
+			wantRightSide:     "5",
+			wantActualValue:   "10",
+			wantExpectedValue: "5",
+		},
+		{
+			name:              "greater than - fail",
+			input:             `{"id": 1}`,
+			expr:              ".id > 100",
+			wantPassed:        false,
+			wantLeftSide:      ".id",
+			wantOperator:      ">",
+			wantRightSide:     "100",
+			wantActualValue:   "1",
+			wantExpectedValue: "100",
+		},
+		{
+			name:              "greater than or equal - pass",
+			input:             `{"score": 10}`,
+			expr:              ".score >= 10",
+			wantPassed:        true,
+			wantLeftSide:      ".score",
+			wantOperator:      ">=",
+			wantRightSide:     "10",
+			wantActualValue:   "10",
+			wantExpectedValue: "10",
+		},
+		{
+			name:              "greater than or equal - fail",
+			input:             `{"id": 1}`,
+			expr:              ".id >= 10",
+			wantPassed:        false,
+			wantLeftSide:      ".id",
+			wantOperator:      ">=",
+			wantRightSide:     "10",
+			wantActualValue:   "1",
+			wantExpectedValue: "10",
+		},
+		{
+			name:              "less than - pass",
+			input:             `{"value": 5}`,
+			expr:              ".value < 10",
+			wantPassed:        true,
+			wantLeftSide:      ".value",
+			wantOperator:      "<",
+			wantRightSide:     "10",
+			wantActualValue:   "5",
+			wantExpectedValue: "10",
+		},
+		{
+			name:              "less than - fail",
+			input:             `{"userId": 1}`,
+			expr:              ".userId < 1",
+			wantPassed:        false,
+			wantLeftSide:      ".userId",
+			wantOperator:      "<",
+			wantRightSide:     "1",
+			wantActualValue:   "1",
+			wantExpectedValue: "1",
+		},
+		{
+			name:              "less than or equal - pass",
+			input:             `{"value": 5}`,
+			expr:              ".value <= 5",
+			wantPassed:        true,
+			wantLeftSide:      ".value",
+			wantOperator:      "<=",
+			wantRightSide:     "5",
+			wantActualValue:   "5",
+			wantExpectedValue: "5",
+		},
+		{
+			name:              "less than or equal - fail",
+			input:             `{"value": 10}`,
+			expr:              ".value <= 5",
+			wantPassed:        false,
+			wantLeftSide:      ".value",
+			wantOperator:      "<=",
+			wantRightSide:     "5",
+			wantActualValue:   "10",
+			wantExpectedValue: "5",
+		},
+		{
+			name:              "complex expression with pipe",
+			input:             `{"title": "delectus aut autem"}`,
+			expr:              ".title | length > 100",
+			wantPassed:        false,
+			wantLeftSide:      ".title | length",
+			wantOperator:      ">",
+			wantRightSide:     "100",
+			wantActualValue:   "18",
+			wantExpectedValue: "100",
+		},
+		{
+			name:              "boolean comparison",
+			input:             `{"completed": false}`,
+			expr:              ".completed == false",
+			wantPassed:        true,
+			wantLeftSide:      ".completed",
+			wantOperator:      "==",
+			wantRightSide:     "false",
+			wantActualValue:   "false",
+			wantExpectedValue: "false",
+		},
+		{
+			name:              "null comparison - equal",
+			input:             `{"userId": 1}`,
+			expr:              ".userId == null",
+			wantPassed:        false,
+			wantLeftSide:      ".userId",
+			wantOperator:      "==",
+			wantRightSide:     "null",
+			wantActualValue:   "1",
+			wantExpectedValue: "null",
+		},
+		{
+			name:              "string comparison",
+			input:             `{"name": "test"}`,
+			expr:              `.name == "test"`,
+			wantPassed:        true,
+			wantLeftSide:      ".name",
+			wantOperator:      "==",
+			wantRightSide:     `"test"`,
+			wantActualValue:   `"test"`,
+			wantExpectedValue: `"test"`,
+		},
+		{
+			name:       "empty expression",
+			input:      `{"id": 1}`,
+			expr:       "",
+			wantPassed: false,
+			wantErr:    true,
+		},
+		{
+			name:       "invalid JSON input",
+			input:      `{invalid}`,
+			expr:       ".id == 1",
+			wantPassed: false,
+			wantErr:    true,
+		},
+		{
+			name:       "non-boolean result",
+			input:      `{"id": 1}`,
+			expr:       ".id",
+			wantPassed: false,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			passed, detail, err := EvalJQBoolWithDetail(tt.input, tt.expr)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EvalJQBoolWithDetail() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				return
+			}
+
+			if passed != tt.wantPassed {
+				t.Errorf("EvalJQBoolWithDetail() passed = %v, want %v", passed, tt.wantPassed)
+			}
+
+			if detail == nil {
+				t.Fatal("EvalJQBoolWithDetail() detail is nil")
+			}
+
+			if detail.Expression != tt.expr {
+				t.Errorf("detail.Expression = %q, want %q", detail.Expression, tt.expr)
+			}
+
+			if tt.wantLeftSide != "" && detail.LeftSide != tt.wantLeftSide {
+				t.Errorf("detail.LeftSide = %q, want %q", detail.LeftSide, tt.wantLeftSide)
+			}
+
+			if tt.wantOperator != "" && detail.Operator != tt.wantOperator {
+				t.Errorf("detail.Operator = %q, want %q", detail.Operator, tt.wantOperator)
+			}
+
+			if tt.wantRightSide != "" && detail.RightSide != tt.wantRightSide {
+				t.Errorf("detail.RightSide = %q, want %q", detail.RightSide, tt.wantRightSide)
+			}
+
+			if tt.wantActualValue != "" && detail.ActualValue != tt.wantActualValue {
+				t.Errorf("detail.ActualValue = %q, want %q", detail.ActualValue, tt.wantActualValue)
+			}
+
+			if tt.wantExpectedValue != "" && detail.ExpectedValue != tt.wantExpectedValue {
+				t.Errorf("detail.ExpectedValue = %q, want %q", detail.ExpectedValue, tt.wantExpectedValue)
+			}
+		})
+	}
+}
+
+func TestFormatValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{
+			name:  "nil value",
+			value: nil,
+			want:  "null",
+		},
+		{
+			name:  "string value",
+			value: "hello",
+			want:  `"hello"`,
+		},
+		{
+			name:  "boolean true",
+			value: true,
+			want:  "true",
+		},
+		{
+			name:  "boolean false",
+			value: false,
+			want:  "false",
+		},
+		{
+			name:  "int value",
+			value: 42,
+			want:  "42",
+		},
+		{
+			name:  "int64 value",
+			value: int64(123),
+			want:  "123",
+		},
+		{
+			name:  "float64 value",
+			value: float64(3.14),
+			want:  "3.14",
+		},
+		{
+			name:  "array value",
+			value: []any{1, 2, 3},
+			want:  "[1,2,3]",
+		},
+		{
+			name:  "object value",
+			value: map[string]any{"key": "value"},
+			want:  `{"key":"value"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatValue(tt.value)
+			if got != tt.want {
+				t.Errorf("formatValue() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

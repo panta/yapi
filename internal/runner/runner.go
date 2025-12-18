@@ -314,6 +314,50 @@ type AssertionResult struct {
 	Error      error
 }
 
+// formatAssertionError creates a detailed error message for a failed assertion
+func formatAssertionError(detail *filter.AssertionDetail) string {
+	if detail == nil {
+		return "assertion failed"
+	}
+
+	// If we have detailed information about the comparison, use it
+	if detail.LeftSide != "" && detail.Operator != "" {
+		var operatorDesc string
+		switch detail.Operator {
+		case "==":
+			operatorDesc = "to equal"
+		case "!=":
+			operatorDesc = "to not equal"
+		case ">":
+			operatorDesc = "to be greater than"
+		case ">=":
+			operatorDesc = "to be greater than or equal to"
+		case "<":
+			operatorDesc = "to be less than"
+		case "<=":
+			operatorDesc = "to be less than or equal to"
+		default:
+			operatorDesc = detail.Operator
+		}
+
+		// Build the error message with available information
+		msg := fmt.Sprintf("assertion failed\n  Expected: %s %s %s",
+			detail.LeftSide,
+			operatorDesc,
+			detail.ExpectedValue)
+
+		if detail.ActualValue != "" {
+			msg += fmt.Sprintf("\n  Actual:   %s = %s", detail.LeftSide, detail.ActualValue)
+		}
+
+		msg += fmt.Sprintf("\n  Expression: %s", detail.Expression)
+		return msg
+	}
+
+	// Fallback to basic error message
+	return fmt.Sprintf("assertion failed: %s", detail.Expression)
+}
+
 // ExpectationResult contains the results of running expectations
 type ExpectationResult struct {
 	StatusPassed     bool
@@ -372,7 +416,7 @@ func CheckExpectations(expect config.Expectation, result *Result) *ExpectationRe
 
 	// JQ Assertions
 	for _, assertion := range expect.Assert {
-		passed, err := filter.EvalJQBool(result.Body, assertion)
+		passed, detail, err := filter.EvalJQBoolWithDetail(result.Body, assertion)
 		ar := AssertionResult{
 			Expression: assertion,
 			Passed:     passed && err == nil,
@@ -385,7 +429,9 @@ func CheckExpectations(expect config.Expectation, result *Result) *ExpectationRe
 			return res
 		}
 		if !passed {
-			res.Error = fmt.Errorf("assertion failed: %s", assertion)
+			// Generate detailed error message based on what we know about the assertion
+			errorMsg := formatAssertionError(detail)
+			res.Error = fmt.Errorf("%s", errorMsg)
 			return res
 		}
 		res.AssertionsPassed++

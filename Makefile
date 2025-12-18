@@ -1,4 +1,4 @@
-.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all lint lint-install lint-quick lint-full gen-docs
+.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all lint lint-install install-lint lint-quick lint-full gen-docs
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")

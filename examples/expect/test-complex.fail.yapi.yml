@@ -1,0 +1,9 @@
+# Test complex JQ assertions
+yapi: v1
+url: https://jsonplaceholder.typicode.com/todos/1
+expect:
+  status: 200
+  assert:
+    - .title | length > 100
+    - (.id + .userId) == 10
+    - .title | startswith("wrong")
