@@ -10,6 +10,7 @@ import (
 	"yapi.run/cli/internal/config"
 	"yapi.run/cli/internal/domain"
 	"yapi.run/cli/internal/executor"
+	"yapi.run/cli/internal/filter"
 )
 
 func TestCheckExpectations_Status(t *testing.T) {
