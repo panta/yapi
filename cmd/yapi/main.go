@@ -826,12 +826,13 @@ func isBinaryContent(content string) bool {
 		// Count non-printable characters (excluding common whitespace)
 		if c < 32 && c != '\t' && c != '\n' && c != '\r' {
 			nonPrintable++
-		} else if c > 126 && c < 128 {
+		} else if c > 126 {
+			// High bytes (> 126) are likely binary
 			nonPrintable++
 		}
 	}
 
-	// If more than 30% of sampled bytes are non-printable, consider it binary
-	threshold := float64(sampleSize) * 0.3
+	// If more than 10% of sampled bytes are non-printable, consider it binary
+	threshold := float64(sampleSize) * 0.1
 	return float64(nonPrintable) > threshold
 }
