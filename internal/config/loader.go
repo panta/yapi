@@ -3,7 +3,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 
 	"gopkg.in/yaml.v3"
 	"yapi.run/cli/internal/domain"
@@ -21,15 +20,6 @@ type ParseResult struct {
 	Chain    []ChainStep // Chain steps if this is a chain config
 	Base     *ConfigV1   // Base config for chain merging
 	Expect   Expectation // Expectations for single request validation
-}
-
-// Load reads and parses a yapi config file from the given path.
-func Load(path string) (*ParseResult, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // user-provided config file
-	if err != nil {
-		return nil, err
-	}
-	return LoadFromString(string(data))
 }
 
 // LoadFromString parses a yapi config from raw YAML data.
