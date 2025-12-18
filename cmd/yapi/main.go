@@ -821,7 +821,7 @@ func isBinaryContent(content string) bool {
 	}
 
 	nonPrintable := 0
-	nonAscii := 0
+	nonASCII := 0
 	for i := 0; i < sampleSize; i++ {
 		c := content[i]
 		// Count non-printable ASCII characters (excluding common whitespace)
@@ -829,7 +829,7 @@ func isBinaryContent(content string) bool {
 			nonPrintable++
 		} else if c > 127 {
 			// High bytes - could be UTF-8 or binary
-			nonAscii++
+			nonASCII++
 		}
 	}
 
@@ -840,7 +840,7 @@ func isBinaryContent(content string) bool {
 	}
 
 	// If we have high bytes, determine if it's UTF-8 text or binary
-	if nonAscii > 0 {
+	if nonASCII > 0 {
 		// If there are control chars mixed with high bytes, it's likely binary
 		if nonPrintable > sampleSize/20 { // More than 5% control characters = binary
 			return true
@@ -848,7 +848,7 @@ func isBinaryContent(content string) bool {
 
 		// If more than 80% of the content is non-ASCII, it's likely binary
 		// (UTF-8 text rarely has that high a ratio unless it's pure emoji/CJK)
-		if float64(nonAscii) > float64(sampleSize)*0.8 {
+		if float64(nonASCII) > float64(sampleSize)*0.8 {
 			return true
 		}
 	}

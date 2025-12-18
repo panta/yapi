@@ -67,7 +67,7 @@ func Run(ctx context.Context, exec executor.TransportFunc, req *domain.Request, 
 
 	// Write to output file if specified
 	if outputFile, ok := req.Metadata["output_file"]; ok && outputFile != "" {
-		if err := os.WriteFile(outputFile, []byte(body), 0644); err != nil {
+		if err := os.WriteFile(outputFile, []byte(body), 0600); err != nil {
 			return nil, fmt.Errorf("failed to write output file '%s': %w", outputFile, err)
 		}
 	}
