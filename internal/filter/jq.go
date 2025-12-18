@@ -113,40 +113,8 @@ type AssertionDetail struct {
 // EvalJQBool evaluates a JQ expression and returns true if it evaluates to boolean true.
 // Used for assertion checking in chains.
 func EvalJQBool(input string, expr string) (bool, error) {
-	expr = strings.TrimSpace(expr)
-	if expr == "" {
-		return false, fmt.Errorf("empty assertion expression")
-	}
-
-	// Parse the jq query
-	query, err := gojq.Parse(expr)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse jq expression %q: %w", expr, err)
-	}
-
-	// Parse the input JSON
-	inputData, err := parseJSONPreserveNumbers(input)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse input as JSON: %w", err)
-	}
-
-	// Run the query
-	iter := query.Run(inputData)
-	v, ok := iter.Next()
-	if !ok {
-		return false, fmt.Errorf("assertion %q produced no result", expr)
-	}
-	if err, isErr := v.(error); isErr {
-		return false, fmt.Errorf("assertion error: %w", err)
-	}
-
-	// Check if result is boolean true
-	switch val := v.(type) {
-	case bool:
-		return val, nil
-	default:
-		return false, fmt.Errorf("assertion %q did not return boolean (got %T: %v)", expr, v, v)
-	}
+	passed, _, err := EvalJQBoolWithDetail(input, expr)
+	return passed, err
 }
 
 // EvalJQBoolWithDetail evaluates a JQ expression and returns detailed information about the assertion.
