@@ -67,25 +67,31 @@ type rootCommand struct {
 	engine       *core.Engine
 }
 
-// ValidationError provides specific information about validation failures.
-type ValidationError struct {
-	Diagnostics []validation.Diagnostic
+// io returns the appropriate writer and color flag based on strict mode
+func (app *rootCommand) io(strict bool) (io.Writer, bool) {
+	if strict {
+		return os.Stderr, app.noColor
+	}
+	return os.Stdout, app.noColor
 }
 
-func (e *ValidationError) Error() string {
-	var errMsgs []string
-	for _, d := range e.Diagnostics {
-		if d.Severity == validation.SeverityError {
-			errMsgs = append(errMsgs, d.Message)
-		}
+// selectConfigFile returns the config file path, handling interactive TUI selection when no args provided.
+// Returns (selectedPath, fromTUI, error).
+func selectConfigFile(args []string, cmdName string) (string, bool, error) {
+	if len(args) > 0 {
+		return args[0], false, nil
 	}
-	if len(errMsgs) == 0 {
-		return "validation failed"
+
+	selectedPath, err := tui.FindConfigFileSingle()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to select config file: %w", err)
 	}
-	if len(errMsgs) == 1 {
-		return errMsgs[0]
-	}
-	return fmt.Sprintf("%d validation errors: %s", len(errMsgs), strings.Join(errMsgs, "; "))
+
+	// Log to history with from_tui flag
+	absPath, _ := filepath.Abs(selectedPath)
+	logHistoryFromTUI(fmt.Sprintf("yapi %s %q", cmdName, absPath))
+
+	return selectedPath, true, nil
 }
 
 func main() {
@@ -144,19 +150,17 @@ func main() {
 }
 
 func (app *rootCommand) runInteractiveE(cmd *cobra.Command, args []string) error {
-	selectedPath, err := tui.FindConfigFileSingle()
+	path, _, err := selectConfigFile(args, "run")
 	if err != nil {
-		return fmt.Errorf("failed to select config file: %w", err)
+		return err
 	}
-	absPath, _ := filepath.Abs(selectedPath)
-	logHistoryFromTUI(fmt.Sprintf("yapi run %q", absPath))
-	return app.runConfigPathE(selectedPath)
+	return app.runConfigPathE(path)
 }
 
 func (app *rootCommand) runE(cmd *cobra.Command, args []string) error {
-	path := "-"
-	if len(args) > 0 {
-		path = args[0]
+	path, _, err := selectConfigFile(args, "run")
+	if err != nil {
+		return err
 	}
 	return app.runConfigPathE(path)
 }
@@ -165,22 +169,12 @@ func (app *rootCommand) watchE(cmd *cobra.Command, args []string) error {
 	pretty, _ := cmd.Flags().GetBool("pretty")
 	noPretty, _ := cmd.Flags().GetBool("no-pretty")
 
-	var path string
-	interactive := len(args) == 0
-
-	if interactive {
-		selectedPath, err := tui.FindConfigFileSingle()
-		if err != nil {
-			return fmt.Errorf("failed to select config file: %w", err)
-		}
-		path = selectedPath
-		absPath, _ := filepath.Abs(selectedPath)
-		logHistoryFromTUI(fmt.Sprintf("yapi watch %q", absPath))
-	} else {
-		path = args[0]
+	path, fromTUI, err := selectConfigFile(args, "watch")
+	if err != nil {
+		return err
 	}
 
-	usePretty := pretty || (interactive && !noPretty)
+	usePretty := pretty || (fromTUI && !noPretty)
 
 	if usePretty {
 		return tui.RunWatch(path)
@@ -292,10 +286,11 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 		return nil
 	}
 
-	app.printErrors(runRes.Analysis, ctx.strict)
+	out, noColor := app.io(ctx.strict)
+	validation.PrintErrors(runRes.Analysis, out, noColor)
 	if runRes.Analysis != nil && runRes.Analysis.HasErrors() {
 		if ctx.strict {
-			return &ValidationError{Diagnostics: runRes.Analysis.Diagnostics}
+			return &validation.Error{Diagnostics: runRes.Analysis.Diagnostics}
 		}
 		return nil
 	}
@@ -325,7 +320,8 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 		}
 
 		fmt.Fprintln(os.Stderr, "\nChain completed successfully.")
-		app.printWarnings(runRes.Analysis, ctx.strict)
+		out, noColor := app.io(ctx.strict)
+		validation.PrintWarnings(runRes.Analysis, out, noColor)
 		return nil
 	}
 
@@ -346,75 +342,9 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 		return nil
 	}
 
-	app.printWarnings(runRes.Analysis, ctx.strict)
+	out, noColor = app.io(ctx.strict)
+	validation.PrintWarnings(runRes.Analysis, out, noColor)
 	return nil
-}
-
-// formatDiagnostic formats a single diagnostic with color.
-func formatDiagnostic(d validation.Diagnostic) string {
-	lineInfo := ""
-	if d.Line >= 0 {
-		lineInfo = fmt.Sprintf(" (line %d)", d.Line+1)
-	}
-
-	switch d.Severity {
-	case validation.SeverityError:
-		return color.Red("[ERROR]" + lineInfo + " " + d.Message)
-	case validation.SeverityWarning:
-		return color.Yellow("[WARN]" + lineInfo + " " + d.Message)
-	default:
-		return color.Cyan("[INFO]" + lineInfo + " " + d.Message)
-	}
-}
-
-// printDiagnostics prints diagnostics filtered by a predicate.
-func (app *rootCommand) printDiagnostics(
-	analysis *validation.Analysis,
-	strict bool,
-	filter func(validation.Diagnostic) bool,
-) {
-	if analysis == nil {
-		return
-	}
-
-	out := os.Stdout
-	if strict {
-		out = os.Stderr
-	}
-
-	for _, d := range analysis.Diagnostics {
-		if !filter(d) {
-			continue
-		}
-		_, _ = fmt.Fprintln(out, formatDiagnostic(d))
-	}
-}
-
-func (app *rootCommand) printErrors(a *validation.Analysis, strict bool) {
-	app.printDiagnostics(a, strict, func(d validation.Diagnostic) bool {
-		return d.Severity == validation.SeverityError
-	})
-}
-
-func (app *rootCommand) printWarnings(a *validation.Analysis, strict bool) {
-	if a == nil {
-		return
-	}
-
-	out := os.Stdout
-	if strict {
-		out = os.Stderr
-	}
-
-	// Print legacy warnings (from parser level) and non-error diagnostics in one pass
-	for _, w := range a.Warnings {
-		_, _ = fmt.Fprintln(out, color.Yellow("[WARN] "+w))
-	}
-	for _, d := range a.Diagnostics {
-		if d.Severity != validation.SeverityError {
-			_, _ = fmt.Fprintln(out, formatDiagnostic(d))
-		}
-	}
 }
 
 // runConfigPathSafe runs a config file without returning error (for watch mode)
@@ -452,31 +382,26 @@ func versionE(cmd *cobra.Command, args []string) error {
 
 func validateE(cmd *cobra.Command, args []string) error {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
-	var text string
 
-	if len(args) == 0 || args[0] == "-" {
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			if jsonOutput {
-				outputValidateError(err)
-				return nil
-			}
-			return fmt.Errorf("failed to read stdin: %w", err)
+	path, _, err := selectConfigFile(args, "validate")
+	if err != nil {
+		if jsonOutput {
+			outputValidateError(err)
+			return nil
 		}
-		text = string(data)
-	} else {
-		data, err := os.ReadFile(args[0])
-		if err != nil {
-			if jsonOutput {
-				outputValidateError(err)
-				return nil
-			}
-			return fmt.Errorf("failed to read file: %w", err)
-		}
-		text = string(data)
+		return err
 	}
 
-	analysis, err := validation.AnalyzeConfigString(text)
+	data, err := utils.ReadInput(path)
+	if err != nil {
+		if jsonOutput {
+			outputValidateError(err)
+			return nil
+		}
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	analysis, err := validation.AnalyzeConfigString(string(data))
 	if err != nil {
 		if jsonOutput {
 			outputValidateError(err)
@@ -490,7 +415,7 @@ func validateE(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	return outputValidateText(analysis)
+	return outputValidateText(analysis, path, data)
 }
 
 func outputValidateError(err error) {
@@ -507,19 +432,40 @@ func outputValidateError(err error) {
 	_ = json.NewEncoder(os.Stdout).Encode(out)
 }
 
-func outputValidateText(analysis *validation.Analysis) error {
+func outputValidateText(analysis *validation.Analysis, path string, data []byte) error {
 	hasOutput := len(analysis.Warnings) > 0 || len(analysis.Diagnostics) > 0
 
-	for _, w := range analysis.Warnings {
-		fmt.Println(color.Yellow("[WARN] " + w))
+	// Print file info header
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, color.AccentBg(" yapi validate "))
+	fmt.Fprintln(os.Stderr)
+
+	// Show file path (or stdin indicator)
+	if path == "-" {
+		fmt.Fprintln(os.Stderr, "  "+color.Dim("source   stdin"))
+	} else {
+		absPath, _ := filepath.Abs(path)
+		fmt.Fprintln(os.Stderr, "  "+color.Dim("file     ")+filepath.Base(absPath))
+		if dir := filepath.Dir(absPath); dir != "" && dir != "." {
+			fmt.Fprintln(os.Stderr, "  "+color.Dim("path     ")+dir)
+		}
 	}
 
-	for _, d := range analysis.Diagnostics {
-		fmt.Println(formatDiagnostic(d))
-	}
+	// Show file stats
+	lines := strings.Count(string(data), "\n") + 1
+	size := len(data)
+	fmt.Fprintln(os.Stderr, "  "+color.Dim("lines    ")+fmt.Sprintf("%d", lines))
+	fmt.Fprintln(os.Stderr, "  "+color.Dim("size     ")+formatBytes(size))
+	fmt.Fprintln(os.Stderr)
 
-	if !hasOutput {
-		fmt.Println(color.Green("Valid"))
+	if hasOutput {
+		// Print errors and warnings
+		validation.PrintErrors(analysis, os.Stderr, false)
+		validation.PrintWarnings(analysis, os.Stderr, false)
+		fmt.Fprintln(os.Stderr)
+	} else {
+		fmt.Fprintln(os.Stderr, "  "+color.Green("Valid!"))
+		fmt.Fprintln(os.Stderr)
 	}
 
 	if analysis.HasErrors() {
@@ -529,7 +475,10 @@ func outputValidateText(analysis *validation.Analysis) error {
 }
 
 func shareE(cmd *cobra.Command, args []string) error {
-	filename := args[0]
+	filename, _, err := selectConfigFile(args, "share")
+	if err != nil {
+		return err
+	}
 
 	data, err := os.ReadFile(filename) //nolint:gosec // user-provided file path
 	if err != nil {

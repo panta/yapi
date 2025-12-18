@@ -1,6 +1,11 @@
 // Package utils provides generic utility functions.
 package utils
 
+import (
+	"io"
+	"os"
+)
+
 // Map transforms a slice of T to a slice of U.
 func Map[T, U any](ts []T, f func(T) U) []U {
 	us := make([]U, len(ts))
@@ -19,6 +24,17 @@ func Coalesce[T comparable](vals ...T) T {
 		}
 	}
 	return zero
+}
+
+// Filter returns a new slice containing only elements that satisfy the predicate.
+func Filter[T any](ts []T, predicate func(T) bool) []T {
+	result := make([]T, 0, len(ts))
+	for _, t := range ts {
+		if predicate(t) {
+			result = append(result, t)
+		}
+	}
+	return result
 }
 
 // MergeMaps merges src into dst. Keys in src overwrite dst. Returns new map.
@@ -69,6 +85,14 @@ func DeepCloneSlice(src []any) []any {
 		}
 	}
 	return dst
+}
+
+// ReadInput reads from stdin if path is empty or "-", otherwise reads from the file.
+func ReadInput(path string) ([]byte, error) {
+	if path == "" || path == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+	return os.ReadFile(path) //nolint:gosec // user-provided file path
 }
 
 // IsBinaryContent checks if the given content appears to be binary data.
