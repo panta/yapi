@@ -110,13 +110,6 @@ type AssertionDetail struct {
 	ExpectedValue string // The expected value (right side)
 }
 
-// EvalJQBool evaluates a JQ expression and returns true if it evaluates to boolean true.
-// Used for assertion checking in chains.
-func EvalJQBool(input string, expr string) (bool, error) {
-	passed, _, err := EvalJQBoolWithDetail(input, expr)
-	return passed, err
-}
-
 // EvalJQBoolWithDetail evaluates a JQ expression and returns detailed information about the assertion.
 // This is useful for generating helpful error messages when assertions fail.
 func EvalJQBoolWithDetail(input string, expr string) (bool, *AssertionDetail, error) {
