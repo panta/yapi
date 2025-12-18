@@ -77,37 +77,37 @@ func TestCheckExpectations_Assert(t *testing.T) {
 	}{
 		{
 			name:        "assertion passes - contains check",
-			expectation: config.Expectation{Assert: []string{`.status == "success"`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.status == "success"`}}},
 			result:      &Result{Body: `{"status": "success"}`},
 			wantErr:     false,
 		},
 		{
 			name:        "assertion fails - value mismatch",
-			expectation: config.Expectation{Assert: []string{`.status == "error"`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.status == "error"`}}},
 			result:      &Result{Body: `{"status": "success"}`},
 			wantErr:     true,
 		},
 		{
 			name:        "assertion passes - field exists",
-			expectation: config.Expectation{Assert: []string{`.status != null`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.status != null`}}},
 			result:      &Result{Body: `{"status": "success"}`},
 			wantErr:     false,
 		},
 		{
 			name:        "assertion fails - field missing",
-			expectation: config.Expectation{Assert: []string{`.missing != null`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.missing != null`}}},
 			result:      &Result{Body: `{"status": "success"}`},
 			wantErr:     true,
 		},
 		{
 			name:        "multiple assertions - all pass",
-			expectation: config.Expectation{Assert: []string{`.status == "success"`, `.data == "test"`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.status == "success"`, `.data == "test"`}}},
 			result:      &Result{Body: `{"status": "success", "data": "test"}`},
 			wantErr:     false,
 		},
 		{
 			name:        "multiple assertions - one fails",
-			expectation: config.Expectation{Assert: []string{`.status == "success"`, `.data == "wrong"`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.status == "success"`, `.data == "wrong"`}}},
 			result:      &Result{Body: `{"status": "success", "data": "test"}`},
 			wantErr:     true,
 		},
@@ -119,13 +119,13 @@ func TestCheckExpectations_Assert(t *testing.T) {
 		},
 		{
 			name:        "array length check",
-			expectation: config.Expectation{Assert: []string{`.items | length > 0`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.items | length > 0`}}},
 			result:      &Result{Body: `{"items": [1, 2, 3]}`},
 			wantErr:     false,
 		},
 		{
 			name:        "empty array fails length check",
-			expectation: config.Expectation{Assert: []string{`.items | length > 0`}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{`.items | length > 0`}}},
 			result:      &Result{Body: `{"items": []}`},
 			wantErr:     true,
 		},
@@ -754,7 +754,7 @@ func TestCheckExpectations_DetailedErrors(t *testing.T) {
 	}{
 		{
 			name:        "equality assertion failure with details",
-			expectation: config.Expectation{Assert: []string{".id == 999"}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{".id == 999"}}},
 			result:      &Result{Body: `{"id": 1, "title": "test"}`},
 			wantErr:     true,
 			wantErrContains: []string{
@@ -765,7 +765,7 @@ func TestCheckExpectations_DetailedErrors(t *testing.T) {
 		},
 		{
 			name:        "greater than assertion failure",
-			expectation: config.Expectation{Assert: []string{".id > 100"}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{".id > 100"}}},
 			result:      &Result{Body: `{"id": 1}`},
 			wantErr:     true,
 			wantErrContains: []string{
@@ -775,7 +775,7 @@ func TestCheckExpectations_DetailedErrors(t *testing.T) {
 		},
 		{
 			name:        "not equal assertion failure",
-			expectation: config.Expectation{Assert: []string{".completed != false"}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{".completed != false"}}},
 			result:      &Result{Body: `{"completed": false}`},
 			wantErr:     true,
 			wantErrContains: []string{
@@ -785,7 +785,7 @@ func TestCheckExpectations_DetailedErrors(t *testing.T) {
 		},
 		{
 			name:        "complex pipe expression failure",
-			expectation: config.Expectation{Assert: []string{".title | length > 100"}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{".title | length > 100"}}},
 			result:      &Result{Body: `{"title": "short"}`},
 			wantErr:     true,
 			wantErrContains: []string{
@@ -795,7 +795,7 @@ func TestCheckExpectations_DetailedErrors(t *testing.T) {
 		},
 		{
 			name:        "null comparison failure",
-			expectation: config.Expectation{Assert: []string{".userId == null"}},
+			expectation: config.Expectation{Assert: config.AssertionSet{Body: []string{".userId == null"}}},
 			result:      &Result{Body: `{"userId": 1}`},
 			wantErr:     true,
 			wantErrContains: []string{
@@ -822,5 +822,353 @@ func TestCheckExpectations_DetailedErrors(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCheckExpectations_HeaderAssertions(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectation config.Expectation
+		result      *Result
+		wantErr     bool
+	}{
+		{
+			name: "header assertion passes - header exists",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["Content-Type"] != null`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "header assertion passes - header value matches",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["Content-Type"] == "application/json"`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "header assertion fails - header missing",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["X-Custom-Header"] != null`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "header assertion fails - value mismatch",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["Content-Type"] == "text/html"`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "multiple header assertions - all pass",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{
+						`.["Content-Type"] != null`,
+						`.["X-Custom"] == "value123"`,
+					},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+					"X-Custom":     "value123",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "multiple header assertions - one fails",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{
+						`.["Content-Type"] != null`,
+						`.["X-Custom"] == "wrong"`,
+					},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+					"X-Custom":     "value123",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "both body and header assertions - all pass",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Body:    []string{`.id == 1`},
+					Headers: []string{`.["Content-Type"] == "application/json"`},
+				},
+			},
+			result: &Result{
+				Body: `{"id": 1}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "both body and header assertions - body fails",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Body:    []string{`.id == 999`},
+					Headers: []string{`.["Content-Type"] == "application/json"`},
+				},
+			},
+			result: &Result{
+				Body: `{"id": 1}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "both body and header assertions - header fails",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Body:    []string{`.id == 1`},
+					Headers: []string{`.["Content-Type"] == "text/html"`},
+				},
+			},
+			result: &Result{
+				Body: `{"id": 1}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "header assertion with complex expression",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`(.["Content-Type"] // "") | contains("json")`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty headers with assertion - fails",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["Content-Type"] != null`},
+				},
+			},
+			result: &Result{
+				Body:    `{}`,
+				Headers: map[string]string{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "case-sensitive header names",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["content-type"] != null`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := CheckExpectations(tt.expectation, tt.result)
+			if (res.Error != nil) != tt.wantErr {
+				t.Errorf("CheckExpectations() error = %v, wantErr %v", res.Error, tt.wantErr)
+			}
+
+			expectedTotal := len(tt.expectation.Assert.Body) + len(tt.expectation.Assert.Headers)
+			if res.AssertionsTotal != expectedTotal {
+				t.Errorf("AssertionsTotal = %d, want %d", res.AssertionsTotal, expectedTotal)
+			}
+
+			if !tt.wantErr && res.AssertionsPassed != expectedTotal {
+				t.Errorf("AssertionsPassed = %d, want %d", res.AssertionsPassed, expectedTotal)
+			}
+		})
+	}
+}
+
+func TestCheckExpectations_HeaderAssertionErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectation config.Expectation
+		result      *Result
+		wantErr     bool
+	}{
+		{
+			name: "header assertion with invalid JQ expression",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["Content-Type"] &`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "header assertion with non-boolean result",
+			expectation: config.Expectation{
+				Assert: config.AssertionSet{
+					Headers: []string{`.["Content-Type"]`},
+				},
+			},
+			result: &Result{
+				Body: `{}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := CheckExpectations(tt.expectation, tt.result)
+			if (res.Error != nil) != tt.wantErr {
+				t.Errorf("CheckExpectations() error = %v, wantErr %v", res.Error, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCheckExpectations_HeaderAssertionResults(t *testing.T) {
+	expectation := config.Expectation{
+		Assert: config.AssertionSet{
+			Headers: []string{
+				`.["Content-Type"] == "application/json"`,
+				`.["X-Custom"] != null`,
+			},
+			Body: []string{
+				`.id == 1`,
+			},
+		},
+	}
+
+	result := &Result{
+		Body: `{"id": 1}`,
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+			"X-Custom":     "value",
+		},
+	}
+
+	res := CheckExpectations(expectation, result)
+
+	if res.Error != nil {
+		t.Errorf("Expected no error, got: %v", res.Error)
+	}
+
+	if res.AssertionsTotal != 3 {
+		t.Errorf("AssertionsTotal = %d, want 3", res.AssertionsTotal)
+	}
+
+	if res.AssertionsPassed != 3 {
+		t.Errorf("AssertionsPassed = %d, want 3", res.AssertionsPassed)
+	}
+
+	if len(res.AssertionResults) != 3 {
+		t.Fatalf("len(AssertionResults) = %d, want 3", len(res.AssertionResults))
+	}
+
+	for i, ar := range res.AssertionResults {
+		if !ar.Passed {
+			t.Errorf("AssertionResults[%d].Passed = false, want true", i)
+		}
+		if ar.Error != nil {
+			t.Errorf("AssertionResults[%d].Error = %v, want nil", i, ar.Error)
+		}
+	}
+}
+
+func TestCheckExpectations_OnlyHeadersNoBody(t *testing.T) {
+	expectation := config.Expectation{
+		Assert: config.AssertionSet{
+			Headers: []string{
+				`.["Content-Type"] != null`,
+				`.["Content-Length"] != null`,
+			},
+		},
+	}
+
+	result := &Result{
+		Body: `{}`,
+		Headers: map[string]string{
+			"Content-Type":   "application/json",
+			"Content-Length": "42",
+		},
+	}
+
+	res := CheckExpectations(expectation, result)
+
+	if res.Error != nil {
+		t.Errorf("Expected no error, got: %v", res.Error)
+	}
+
+	if res.AssertionsTotal != 2 {
+		t.Errorf("AssertionsTotal = %d, want 2 (only headers)", res.AssertionsTotal)
+	}
+
+	if res.AssertionsPassed != 2 {
+		t.Errorf("AssertionsPassed = %d, want 2", res.AssertionsPassed)
 	}
 }
