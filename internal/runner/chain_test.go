@@ -595,3 +595,232 @@ func TestRunChain_NegativeDelay(t *testing.T) {
 		t.Errorf("unexpected error for negative duration: %v", err)
 	}
 }
+
+func TestFormatAssertionError(t *testing.T) {
+	tests := []struct {
+		name        string
+		detail      *filter.AssertionDetail
+		wantContain []string
+	}{
+		{
+			name: "equality operator",
+			detail: &filter.AssertionDetail{
+				Expression:    ".id == 999",
+				LeftSide:      ".id",
+				Operator:      "==",
+				RightSide:     "999",
+				ActualValue:   "1",
+				ExpectedValue: "999",
+			},
+			wantContain: []string{
+				"Expected: .id to equal 999",
+				"Actual:   .id = 1",
+				"Expression: .id == 999",
+			},
+		},
+		{
+			name: "not equal operator",
+			detail: &filter.AssertionDetail{
+				Expression:    ".userId != null",
+				LeftSide:      ".userId",
+				Operator:      "!=",
+				RightSide:     "null",
+				ActualValue:   "1",
+				ExpectedValue: "null",
+			},
+			wantContain: []string{
+				"Expected: .userId to not equal null",
+				"Actual:   .userId = 1",
+				"Expression: .userId != null",
+			},
+		},
+		{
+			name: "greater than operator",
+			detail: &filter.AssertionDetail{
+				Expression:    ".id > 100",
+				LeftSide:      ".id",
+				Operator:      ">",
+				RightSide:     "100",
+				ActualValue:   "1",
+				ExpectedValue: "100",
+			},
+			wantContain: []string{
+				"Expected: .id to be greater than 100",
+				"Actual:   .id = 1",
+				"Expression: .id > 100",
+			},
+		},
+		{
+			name: "greater than or equal operator",
+			detail: &filter.AssertionDetail{
+				Expression:    ".score >= 10",
+				LeftSide:      ".score",
+				Operator:      ">=",
+				RightSide:     "10",
+				ActualValue:   "5",
+				ExpectedValue: "10",
+			},
+			wantContain: []string{
+				"Expected: .score to be greater than or equal to 10",
+				"Actual:   .score = 5",
+				"Expression: .score >= 10",
+			},
+		},
+		{
+			name: "less than operator",
+			detail: &filter.AssertionDetail{
+				Expression:    ".value < 10",
+				LeftSide:      ".value",
+				Operator:      "<",
+				RightSide:     "10",
+				ActualValue:   "15",
+				ExpectedValue: "10",
+			},
+			wantContain: []string{
+				"Expected: .value to be less than 10",
+				"Actual:   .value = 15",
+				"Expression: .value < 10",
+			},
+		},
+		{
+			name: "less than or equal operator",
+			detail: &filter.AssertionDetail{
+				Expression:    ".count <= 5",
+				LeftSide:      ".count",
+				Operator:      "<=",
+				RightSide:     "5",
+				ActualValue:   "10",
+				ExpectedValue: "5",
+			},
+			wantContain: []string{
+				"Expected: .count to be less than or equal to 5",
+				"Actual:   .count = 10",
+				"Expression: .count <= 5",
+			},
+		},
+		{
+			name: "complex expression with pipe",
+			detail: &filter.AssertionDetail{
+				Expression:    ".title | length > 100",
+				LeftSide:      ".title | length",
+				Operator:      ">",
+				RightSide:     "100",
+				ActualValue:   "18",
+				ExpectedValue: "100",
+			},
+			wantContain: []string{
+				"Expected: .title | length to be greater than 100",
+				"Actual:   .title | length = 18",
+				"Expression: .title | length > 100",
+			},
+		},
+		{
+			name: "nil detail",
+			detail: nil,
+			wantContain: []string{
+				"assertion failed",
+			},
+		},
+		{
+			name: "detail without operator info",
+			detail: &filter.AssertionDetail{
+				Expression: ".some.complex.expression",
+			},
+			wantContain: []string{
+				"assertion failed: .some.complex.expression",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatAssertionError(tt.detail)
+			for _, want := range tt.wantContain {
+				if !strings.Contains(got, want) {
+					t.Errorf("formatAssertionError() = %q\nwant to contain: %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestCheckExpectations_DetailedErrors(t *testing.T) {
+	tests := []struct {
+		name             string
+		expectation      config.Expectation
+		result           *Result
+		wantErr          bool
+		wantErrContains  []string
+	}{
+		{
+			name:        "equality assertion failure with details",
+			expectation: config.Expectation{Assert: []string{".id == 999"}},
+			result:      &Result{Body: `{"id": 1, "title": "test"}`},
+			wantErr:     true,
+			wantErrContains: []string{
+				"Expected: .id to equal 999",
+				"Actual:   .id = 1",
+				"Expression: .id == 999",
+			},
+		},
+		{
+			name:        "greater than assertion failure",
+			expectation: config.Expectation{Assert: []string{".id > 100"}},
+			result:      &Result{Body: `{"id": 1}`},
+			wantErr:     true,
+			wantErrContains: []string{
+				"Expected: .id to be greater than 100",
+				"Actual:   .id = 1",
+			},
+		},
+		{
+			name:        "not equal assertion failure",
+			expectation: config.Expectation{Assert: []string{".completed != false"}},
+			result:      &Result{Body: `{"completed": false}`},
+			wantErr:     true,
+			wantErrContains: []string{
+				"Expected: .completed to not equal false",
+				"Actual:   .completed = false",
+			},
+		},
+		{
+			name:        "complex pipe expression failure",
+			expectation: config.Expectation{Assert: []string{".title | length > 100"}},
+			result:      &Result{Body: `{"title": "short"}`},
+			wantErr:     true,
+			wantErrContains: []string{
+				"Expected: .title | length to be greater than 100",
+				"Actual:   .title | length = 5",
+			},
+		},
+		{
+			name:        "null comparison failure",
+			expectation: config.Expectation{Assert: []string{".userId == null"}},
+			result:      &Result{Body: `{"userId": 1}`},
+			wantErr:     true,
+			wantErrContains: []string{
+				"Expected: .userId to equal null",
+				"Actual:   .userId = 1",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := CheckExpectations(tt.expectation, tt.result)
+			if (res.Error != nil) != tt.wantErr {
+				t.Errorf("CheckExpectations() error = %v, wantErr %v", res.Error, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr && res.Error != nil {
+				errMsg := res.Error.Error()
+				for _, want := range tt.wantErrContains {
+					if !strings.Contains(errMsg, want) {
+						t.Errorf("CheckExpectations() error message:\n%s\nwant to contain: %q", errMsg, want)
+					}
+				}
+			}
+		})
+	}
+}
