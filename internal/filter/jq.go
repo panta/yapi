@@ -100,6 +100,16 @@ func convertNumbers(v any) any {
 	}
 }
 
+// AssertionDetail contains detailed information about an assertion failure
+type AssertionDetail struct {
+	Expression    string // The full assertion expression
+	LeftSide      string // The left side of comparison (e.g., ".id")
+	Operator      string // The operator (e.g., "==", "!=", ">", etc.)
+	RightSide     string // The right side/expected value (e.g., "999")
+	ActualValue   string // The actual value from the left side evaluation
+	ExpectedValue string // The expected value (right side)
+}
+
 // EvalJQBool evaluates a JQ expression and returns true if it evaluates to boolean true.
 // Used for assertion checking in chains.
 func EvalJQBool(input string, expr string) (bool, error) {
@@ -136,6 +146,116 @@ func EvalJQBool(input string, expr string) (bool, error) {
 		return val, nil
 	default:
 		return false, fmt.Errorf("assertion %q did not return boolean (got %T: %v)", expr, v, v)
+	}
+}
+
+// EvalJQBoolWithDetail evaluates a JQ expression and returns detailed information about the assertion.
+// This is useful for generating helpful error messages when assertions fail.
+func EvalJQBoolWithDetail(input string, expr string) (bool, *AssertionDetail, error) {
+	expr = strings.TrimSpace(expr)
+	detail := &AssertionDetail{
+		Expression: expr,
+	}
+
+	if expr == "" {
+		return false, detail, fmt.Errorf("empty assertion expression")
+	}
+
+	// Try to parse the assertion to extract left side, operator, and right side
+	// Common patterns: .field == value, .field != value, .field > value, etc.
+	// Check multi-character operators first to avoid incorrect matches
+	operators := []string{"==", "!=", ">=", "<=", ">", "<"}
+	for _, op := range operators {
+		if idx := strings.Index(expr, op); idx != -1 {
+			// Make sure this is the operator and not part of a larger operator
+			// For example, don't match "=" in ">="
+			validMatch := true
+			if op == "=" || op == ">" || op == "<" {
+				// Check if this is part of a two-character operator
+				if idx > 0 && (expr[idx-1] == '>' || expr[idx-1] == '<' || expr[idx-1] == '!' || expr[idx-1] == '=') {
+					validMatch = false
+				}
+				if idx < len(expr)-1 && expr[idx+1] == '=' {
+					validMatch = false
+				}
+			}
+
+			if validMatch {
+				detail.LeftSide = strings.TrimSpace(expr[:idx])
+				detail.Operator = op
+				detail.RightSide = strings.TrimSpace(expr[idx+len(op):])
+				detail.ExpectedValue = detail.RightSide
+				break
+			}
+		}
+	}
+
+	// Parse the jq query
+	query, err := gojq.Parse(expr)
+	if err != nil {
+		return false, detail, fmt.Errorf("failed to parse jq expression %q: %w", expr, err)
+	}
+
+	// Parse the input JSON
+	inputData, err := parseJSONPreserveNumbers(input)
+	if err != nil {
+		return false, detail, fmt.Errorf("failed to parse input as JSON: %w", err)
+	}
+
+	// If we successfully parsed the left side, evaluate it to get the actual value
+	if detail.LeftSide != "" {
+		leftQuery, err := gojq.Parse(detail.LeftSide)
+		if err == nil {
+			leftIter := leftQuery.Run(inputData)
+			if leftVal, ok := leftIter.Next(); ok {
+				if _, isErr := leftVal.(error); !isErr {
+					detail.ActualValue = formatValue(leftVal)
+				}
+			}
+		}
+	}
+
+	// Run the full query
+	iter := query.Run(inputData)
+	v, ok := iter.Next()
+	if !ok {
+		return false, detail, fmt.Errorf("assertion %q produced no result", expr)
+	}
+	if err, isErr := v.(error); isErr {
+		return false, detail, fmt.Errorf("assertion error: %w", err)
+	}
+
+	// Check if result is boolean true
+	switch val := v.(type) {
+	case bool:
+		return val, detail, nil
+	default:
+		return false, detail, fmt.Errorf("assertion %q did not return boolean (got %T: %v)", expr, v, v)
+	}
+}
+
+// formatValue formats a value for display in error messages
+func formatValue(v any) string {
+	if v == nil {
+		return "null"
+	}
+
+	switch val := v.(type) {
+	case string:
+		return fmt.Sprintf("%q", val)
+	case bool:
+		return fmt.Sprintf("%v", val)
+	case int, int64, float64:
+		return fmt.Sprintf("%v", val)
+	case *big.Int:
+		return val.String()
+	default:
+		// For complex types, use JSON encoding
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return string(b)
 	}
 }
 
