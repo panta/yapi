@@ -103,7 +103,50 @@ func (a *Analysis) ToJSON() JSONOutput {
 // AnalyzeConfigString is the single entrypoint for analyzing YAML config.
 // Both CLI and LSP should call this function.
 func AnalyzeConfigString(text string) (*Analysis, error) {
-	parseRes, err := config.LoadFromString(text)
+	return AnalyzeConfigStringWithProject(text, nil, "")
+}
+
+// AnalyzeConfigStringWithProject analyzes a YAML config with optional project context.
+// If project is provided, performs cross-environment variable validation, uses project
+// variables from the default environment for resolution, and applies environment defaults.
+func AnalyzeConfigStringWithProject(text string, project *config.ProjectConfigV1, projectRoot string) (*Analysis, error) {
+	var parseRes *config.ParseResult
+	var err error
+
+	// If project config is available, use project variables and defaults
+	if project != nil {
+		// Get the default environment (or first available environment)
+		envName := project.DefaultEnvironment
+		if envName == "" && len(project.Environments) > 0 {
+			// If no default, use the first environment alphabetically for consistency
+			envNames := project.ListEnvironments()
+			if len(envNames) > 0 {
+				envName = envNames[0]
+			}
+		}
+
+		// Get the environment to extract defaults
+		var envDefaults *config.ConfigV1
+		if env, ok := project.Environments[envName]; ok {
+			// Extract the embedded ConfigV1 from the environment
+			envDefaults = &env.ConfigV1
+		}
+
+		// Resolve environment variables from project config
+		envVars, resolveErr := project.ResolveEnvFiles(projectRoot, envName)
+		if resolveErr == nil {
+			// Build project-aware resolver
+			resolver := BuildProjectResolver(envVars)
+			parseRes, err = config.LoadFromStringWithOptions(text, resolver, envDefaults)
+		} else {
+			// Fall back to parsing with just defaults if we can't resolve env vars
+			parseRes, err = config.LoadFromStringWithOptions(text, nil, envDefaults)
+		}
+	} else {
+		// No project config - use default env resolver
+		parseRes, err = config.LoadFromString(text)
+	}
+
 	if err != nil {
 		line := extractLineFromError(err.Error())
 		diag := Diagnostic{
@@ -115,7 +158,7 @@ func AnalyzeConfigString(text string) (*Analysis, error) {
 		}
 		return &Analysis{Diagnostics: []Diagnostic{diag}}, nil
 	}
-	return analyzeParsed(text, parseRes), nil
+	return analyzeParsed(text, parseRes, project, projectRoot), nil
 }
 
 // AnalyzeConfigFile loads a file and analyzes it.
@@ -145,17 +188,24 @@ func AnalyzeConfigFile(path string) (*Analysis, error) {
 		return &Analysis{Diagnostics: []Diagnostic{diag}}, nil
 	}
 
-	return analyzeParsed(string(data), parseRes), nil
+	return analyzeParsed(string(data), parseRes, nil, ""), nil
 }
 
 // analyzeParsed is the common analysis path for both string and file inputs.
-func analyzeParsed(text string, parseRes *config.ParseResult) *Analysis {
+func analyzeParsed(text string, parseRes *config.ParseResult, project *config.ProjectConfigV1, projectRoot string) *Analysis {
 	var diags []Diagnostic
 
 	// Chain config
 	if len(parseRes.Chain) > 0 {
 		diags = append(diags, validateChain(text, parseRes.Base, parseRes.Chain)...)
-		diags = append(diags, validateEnvVars(text)...)
+
+		// Use project-aware validation if available
+		if project != nil {
+			diags = append(diags, ValidateProjectVars(text, project, projectRoot)...)
+		} else {
+			diags = append(diags, validateEnvVars(text)...)
+		}
+
 		return &Analysis{
 			Chain:       parseRes.Chain,
 			Base:        parseRes.Base,
@@ -180,7 +230,13 @@ func analyzeParsed(text string, parseRes *config.ParseResult) *Analysis {
 	diags = append(diags, ValidateGraphQLSyntax(text, req)...)
 	diags = append(diags, ValidateJQSyntax(text, req)...)
 	diags = append(diags, validateUnknownKeys(text)...)
-	diags = append(diags, validateEnvVars(text)...)
+
+	// Use project-aware validation if available
+	if project != nil {
+		diags = append(diags, ValidateProjectVars(text, project, projectRoot)...)
+	} else {
+		diags = append(diags, validateEnvVars(text)...)
+	}
 
 	if len(parseRes.Expect.Assert.Body) > 0 {
 		diags = append(diags, ValidateChainAssertions(text, parseRes.Expect.Assert.Body, "")...)
@@ -416,6 +472,16 @@ type EnvVarInfo struct {
 	EndIndex   int
 }
 
+// isJQBuiltin returns true if the variable name is a known JQ built-in variable.
+// JQ built-ins in yapi include: _headers, _body, _request, _response
+func isJQBuiltin(varName string) bool {
+	switch varName {
+	case "_headers", "_body", "_request", "_response":
+		return true
+	}
+	return false
+}
+
 // FindEnvVarRefs finds all environment variable references in text
 func FindEnvVarRefs(text string) []EnvVarInfo {
 	var refs []EnvVarInfo
@@ -427,6 +493,25 @@ func FindEnvVarRefs(text string) []EnvVarInfo {
 
 	for lineNum, line := range lines {
 		trimmed := strings.TrimSpace(line)
+
+		// Skip YAML comments
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Strip inline comments (everything after # that's not in a string)
+		// Simple heuristic: find # that's not inside quotes
+		lineWithoutComment := line
+		if idx := strings.Index(line, "#"); idx != -1 {
+			// Check if the # is inside quotes by counting quotes before it
+			beforeHash := line[:idx]
+			doubleQuotes := strings.Count(beforeHash, "\"") - strings.Count(beforeHash, "\\\"")
+			singleQuotes := strings.Count(beforeHash, "'") - strings.Count(beforeHash, "\\'")
+			// If even number of quotes before #, it's not inside a string
+			if doubleQuotes%2 == 0 && singleQuotes%2 == 0 {
+				lineWithoutComment = line[:idx]
+			}
+		}
 
 		// Check for graphql: field start
 		if strings.HasPrefix(trimmed, "graphql:") {
@@ -454,25 +539,25 @@ func FindEnvVarRefs(text string) []EnvVarInfo {
 			}
 		}
 
-		matches := vars.EnvOnly.FindAllStringSubmatchIndex(line, -1)
+		matches := vars.EnvOnly.FindAllStringSubmatchIndex(lineWithoutComment, -1)
 		for _, match := range matches {
 			// match[0:2] = full match, match[2:4] = ${VAR} capture, match[4:6] = $VAR capture
 			fullStart, fullEnd := match[0], match[1]
-			fullMatch := line[fullStart:fullEnd]
+			fullMatch := lineWithoutComment[fullStart:fullEnd]
 
 			// Skip if this looks like a chain reference (contains a dot after the var name)
 			// Check the character after the match
-			if fullEnd < len(line) && line[fullEnd] == '.' {
+			if fullEnd < len(lineWithoutComment) && lineWithoutComment[fullEnd] == '.' {
 				continue
 			}
 
 			var varName string
 			if match[2] != -1 {
 				// ${VAR} style
-				varName = line[match[2]:match[3]]
+				varName = lineWithoutComment[match[2]:match[3]]
 			} else if match[4] != -1 {
 				// $VAR style
-				varName = line[match[4]:match[5]]
+				varName = lineWithoutComment[match[4]:match[5]]
 			}
 
 			if varName == "" {
@@ -485,8 +570,9 @@ func FindEnvVarRefs(text string) []EnvVarInfo {
 				continue
 			}
 
-			// Skip JQ variables (start with underscore, e.g., $_headers, $_body)
-			if strings.HasPrefix(varName, "_") {
+			// Skip known JQ built-in variables (_headers, _body, etc.)
+			// but allow user environment variables that happen to start with underscore
+			if isJQBuiltin(varName) {
 				continue
 			}
 

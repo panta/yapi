@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -18,6 +21,7 @@ import (
 	"yapi.run/cli/internal/cli/color"
 	"yapi.run/cli/internal/cli/commands"
 	"yapi.run/cli/internal/cli/middleware"
+	"yapi.run/cli/internal/config"
 	"yapi.run/cli/internal/core"
 	"yapi.run/cli/internal/langserver"
 	"yapi.run/cli/internal/observability"
@@ -78,11 +82,27 @@ func (app *rootCommand) io(strict bool) (io.Writer, bool) {
 // selectConfigFile returns the config file path, handling interactive TUI selection when no args provided.
 // Returns (selectedPath, fromTUI, error).
 func selectConfigFile(args []string, cmdName string) (string, bool, error) {
+	return selectConfigFileWithOptions(args, cmdName, false)
+}
+
+// selectConfigFileIncludingProject returns the config file path, including project config files in TUI.
+// Returns (selectedPath, fromTUI, error).
+func selectConfigFileIncludingProject(args []string, cmdName string) (string, bool, error) {
+	return selectConfigFileWithOptions(args, cmdName, true)
+}
+
+func selectConfigFileWithOptions(args []string, cmdName string, includeProjectConfig bool) (string, bool, error) {
 	if len(args) > 0 {
 		return args[0], false, nil
 	}
 
-	selectedPath, err := tui.FindConfigFileSingle()
+	var selectedPath string
+	var err error
+	if includeProjectConfig {
+		selectedPath, err = tui.FindConfigFileSingleIncludingProject()
+	} else {
+		selectedPath, err = tui.FindConfigFileSingle()
+	}
 	if err != nil {
 		return "", false, fmt.Errorf("failed to select config file: %w", err)
 	}
@@ -120,6 +140,8 @@ func main() {
 		Validate:       validateE,
 		Share:          shareE,
 		Test:           app.testE,
+		List:           listE,
+		Stress:         app.stressE,
 	}
 
 	rootCmd := commands.BuildRoot(cfg, handlers)
@@ -162,12 +184,16 @@ func (app *rootCommand) runE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return app.runConfigPathE(path)
+
+	// Get --env flag if specified
+	envName, _ := cmd.Flags().GetString("env")
+	return app.runConfigPathWithEnvE(path, envName)
 }
 
 func (app *rootCommand) watchE(cmd *cobra.Command, args []string) error {
 	pretty, _ := cmd.Flags().GetBool("pretty")
 	noPretty, _ := cmd.Flags().GetBool("no-pretty")
+	envName, _ := cmd.Flags().GetString("env")
 
 	path, fromTUI, err := selectConfigFile(args, "watch")
 	if err != nil {
@@ -179,10 +205,10 @@ func (app *rootCommand) watchE(cmd *cobra.Command, args []string) error {
 	if usePretty {
 		return tui.RunWatch(path)
 	}
-	return app.watchConfigPath(path)
+	return app.watchConfigPath(path, envName)
 }
 
-func (app *rootCommand) watchConfigPath(path string) error {
+func (app *rootCommand) watchConfigPath(path string, envName string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
@@ -190,7 +216,7 @@ func (app *rootCommand) watchConfigPath(path string) error {
 
 	clearScreen()
 	printWatchHeader(absPath)
-	app.runConfigPathSafe(absPath)
+	_ = app.executeRunE(runContext{path: absPath, strict: false, envName: envName})
 
 	lastMod, err := getModTime(absPath)
 	if err != nil {
@@ -211,7 +237,7 @@ func (app *rootCommand) watchConfigPath(path string) error {
 			lastMod = currentMod
 			clearScreen()
 			printWatchHeader(absPath)
-			app.runConfigPathSafe(absPath)
+			_ = app.executeRunE(runContext{path: absPath, strict: false, envName: envName})
 		}
 	}
 	return nil
@@ -237,8 +263,9 @@ func printWatchHeader(path string) {
 
 // runContext holds options for executeRun
 type runContext struct {
-	path   string
-	strict bool // If true, return error on failures; if false, print and return nil
+	path    string
+	strict  bool   // If true, return error on failures; if false, print and return nil
+	envName string // Target environment from yapi.config.yml
 }
 
 // printResult outputs a single result with optional expectation.
@@ -273,6 +300,25 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 		URLOverride:  app.urlOverride,
 		NoColor:      app.noColor,
 		BinaryOutput: app.binaryOutput,
+	}
+
+	// Load project and environment configuration
+	projEnv, err := loadProjectAndEnv(ctx.path, ctx.envName, true)
+	if err != nil {
+		if ctx.strict {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "%s\n", color.Red(err.Error()))
+		return nil
+	}
+
+	// Apply project settings if found
+	if projEnv != nil {
+		opts.ProjectRoot = projEnv.projectRoot
+		if projEnv.envVars != nil {
+			opts.EnvOverrides = projEnv.envVars
+			opts.ProjectEnv = projEnv.envName
+		}
 	}
 
 	runRes := app.engine.RunConfig(context.Background(), ctx.path, opts)
@@ -347,14 +393,97 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 	return nil
 }
 
-// runConfigPathSafe runs a config file without returning error (for watch mode)
-func (app *rootCommand) runConfigPathSafe(path string) {
-	_ = app.executeRunE(runContext{path: path, strict: false})
-}
-
 // runConfigPathE runs a config file in strict mode (returns error)
 func (app *rootCommand) runConfigPathE(path string) error {
 	return app.executeRunE(runContext{path: path, strict: true})
+}
+
+// runConfigPathWithEnvE runs a config file with a specific environment in strict mode
+func (app *rootCommand) runConfigPathWithEnvE(path string, envName string) error {
+	return app.executeRunE(runContext{path: path, strict: true, envName: envName})
+}
+
+// projectEnvResult holds the result of loading a project and optional environment
+type projectEnvResult struct {
+	project     *config.ProjectConfigV1
+	projectRoot string
+	envVars     map[string]string
+	envName     string
+}
+
+// loadProjectAndEnv loads project config and optional environment variables.
+// Returns nil result with no error if no project found (not an error condition).
+// Returns error only for actual load failures.
+func loadProjectAndEnv(configPath string, requestedEnv string, checkRequirement bool) (*projectEnvResult, error) {
+	// Resolve absolute path
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve path: %w", err)
+	}
+	configDir := filepath.Dir(absPath)
+
+	// Try to find project root
+	projectRoot, err := config.FindProjectRoot(configDir)
+	if err != nil {
+		// No project found - not an error if no env was requested
+		if requestedEnv != "" {
+			return nil, fmt.Errorf("--env flag specified but no yapi.config.yml found in directory tree")
+		}
+		return nil, nil
+	}
+
+	// Load project config
+	project, err := config.LoadProject(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load project config: %w", err)
+	}
+
+	result := &projectEnvResult{
+		project:     project,
+		projectRoot: projectRoot,
+	}
+
+	// Determine which environment to use
+	envName := requestedEnv
+	if envName == "" && project.DefaultEnvironment != "" {
+		envName = project.DefaultEnvironment
+	}
+
+	// Check if config requires an environment (only if requested and no explicit env)
+	if envName == "" && checkRequirement {
+		configData, readErr := os.ReadFile(configPath) // #nosec G304 -- configPath is validated user-provided config file path
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read config: %w", readErr)
+		}
+		req := validation.CheckEnvironmentRequirement(string(configData), project, projectRoot)
+		if req.Required {
+			return nil, fmt.Errorf("%s", req.Message)
+		}
+		// Config doesn't need environment - return project info only
+		return result, nil
+	}
+
+	// Load environment if specified
+	if envName != "" {
+		// Validate environment exists
+		if _, ok := project.Environments[envName]; !ok {
+			availableEnvs := project.ListEnvironments()
+			sort.Strings(availableEnvs)
+			return nil, fmt.Errorf("environment '%s' not found in yapi.config.yml\nAvailable environments: %s",
+				envName, strings.Join(availableEnvs, ", "))
+		}
+
+		// Load environment variables
+		envVars, err := project.ResolveEnvFiles(projectRoot, envName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load environment '%s': %w", envName, err)
+		}
+
+		result.envVars = envVars
+		result.envName = envName
+	}
+
+	return result, nil
 }
 
 func lspE(cmd *cobra.Command, args []string) error {
@@ -383,13 +512,39 @@ func versionE(cmd *cobra.Command, args []string) error {
 func validateE(cmd *cobra.Command, args []string) error {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 
-	path, _, err := selectConfigFile(args, "validate")
+	var path string
+	var err error
+
+	// If no file provided, look for project config first
+	if len(args) == 0 {
+		cwd, _ := os.Getwd()
+		if projectRoot, findErr := config.FindProjectRoot(cwd); findErr == nil {
+			// Found a project config, validate it
+			configPath := filepath.Join(projectRoot, "yapi.config.yml")
+			if _, statErr := os.Stat(configPath); statErr == nil {
+				return validateProjectConfigFile(configPath, jsonOutput)
+			}
+			configPath = filepath.Join(projectRoot, "yapi.config.yaml")
+			if _, statErr := os.Stat(configPath); statErr == nil {
+				return validateProjectConfigFile(configPath, jsonOutput)
+			}
+		}
+	}
+
+	// Otherwise use normal file selection (including project config files)
+	path, _, err = selectConfigFileIncludingProject(args, "validate")
 	if err != nil {
 		if jsonOutput {
 			outputValidateError(err)
 			return nil
 		}
 		return err
+	}
+
+	// Check if this is a project config file
+	fileName := filepath.Base(path)
+	if fileName == "yapi.config.yml" || fileName == "yapi.config.yaml" {
+		return validateProjectConfigFile(path, jsonOutput)
 	}
 
 	data, err := utils.ReadInput(path)
@@ -416,6 +571,68 @@ func validateE(cmd *cobra.Command, args []string) error {
 	}
 
 	return outputValidateText(analysis, path, data)
+}
+
+func validateProjectConfigFile(path string, jsonOutput bool) error {
+	// Try to load the project config
+	projectRoot := filepath.Dir(path)
+	_, err := config.LoadProject(projectRoot)
+
+	if jsonOutput {
+		if err != nil {
+			out := validation.JSONOutput{
+				Valid: false,
+				Diagnostics: []validation.JSONDiagnostic{{
+					Severity: "error",
+					Message:  fmt.Sprintf("Invalid project config: %v", err),
+					Line:     0,
+					Col:      0,
+				}},
+				Warnings: []string{},
+			}
+			_ = json.NewEncoder(os.Stdout).Encode(out)
+		} else {
+			out := validation.JSONOutput{
+				Valid:       true,
+				Diagnostics: []validation.JSONDiagnostic{},
+				Warnings:    []string{},
+			}
+			_ = json.NewEncoder(os.Stdout).Encode(out)
+		}
+		return nil
+	}
+
+	// Text output
+	data, readErr := os.ReadFile(path) // #nosec G304 -- path is validated user-provided config file path
+	if readErr != nil {
+		return fmt.Errorf("failed to read config: %w", readErr)
+	}
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, color.AccentBg(" yapi validate "))
+	fmt.Fprintln(os.Stderr)
+
+	absPath, _ := filepath.Abs(path)
+	fmt.Fprintln(os.Stderr, "  "+color.Dim("file     ")+filepath.Base(absPath))
+	if dir := filepath.Dir(absPath); dir != "" && dir != "." {
+		fmt.Fprintln(os.Stderr, "  "+color.Dim("path     ")+dir)
+	}
+
+	lines := strings.Count(string(data), "\n") + 1
+	size := len(data)
+	fmt.Fprintln(os.Stderr, "  "+color.Dim("lines    ")+fmt.Sprintf("%d", lines))
+	fmt.Fprintln(os.Stderr, "  "+color.Dim("size     ")+formatBytes(size))
+	fmt.Fprintln(os.Stderr)
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, color.Red("[ERROR] ")+err.Error())
+		fmt.Fprintln(os.Stderr)
+		return errors.New("validation errors")
+	}
+
+	fmt.Fprintln(os.Stderr, "  "+color.Green("Valid project configuration!"))
+	fmt.Fprintln(os.Stderr)
+	return nil
 }
 
 func outputValidateError(err error) {
@@ -749,6 +966,8 @@ func fileExists(path string) bool {
 
 func (app *rootCommand) testE(cmd *cobra.Command, args []string) error {
 	verbose, _ := cmd.Flags().GetBool("verbose")
+	envName, _ := cmd.Flags().GetString("env")
+	all, _ := cmd.Flags().GetBool("all")
 
 	// Determine search directory
 	searchDir := "."
@@ -757,13 +976,17 @@ func (app *rootCommand) testE(cmd *cobra.Command, args []string) error {
 	}
 
 	// Find all test files
-	testFiles, err := findTestFiles(searchDir)
+	testFiles, err := findTestFiles(searchDir, all)
 	if err != nil {
 		return fmt.Errorf("failed to find test files: %w", err)
 	}
 
 	if len(testFiles) == 0 {
-		fmt.Fprintf(os.Stderr, "%s\n", color.Yellow("No *.test.yapi.yml files found"))
+		if all {
+			fmt.Fprintf(os.Stderr, "%s\n", color.Yellow("No *.yapi.yml files found"))
+		} else {
+			fmt.Fprintf(os.Stderr, "%s\n", color.Yellow("No *.test.yapi.yml files found"))
+		}
 		return nil
 	}
 
@@ -786,7 +1009,7 @@ func (app *rootCommand) testE(cmd *cobra.Command, args []string) error {
 		}
 
 		// Run the test file
-		err := app.executeRunE(runContext{path: testFile, strict: true})
+		err := app.executeRunE(runContext{path: testFile, strict: true, envName: envName})
 
 		result := testResult{
 			file:   relPath,
@@ -839,8 +1062,10 @@ func (app *rootCommand) testE(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("%d test(s) failed", failCount)
 }
 
-// findTestFiles recursively finds all *.test.yapi.yml files in the given directory
-func findTestFiles(dir string) ([]string, error) {
+// findTestFiles recursively finds test files in the given directory.
+// If all is true, finds all *.yapi.yml files.
+// If all is false, finds only *.test.yapi.yml files.
+func findTestFiles(dir string, all bool) ([]string, error) {
 	var testFiles []string
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -852,15 +1077,384 @@ func findTestFiles(dir string) ([]string, error) {
 		}
 		if filepath.Ext(path) == ".yml" || filepath.Ext(path) == ".yaml" {
 			base := filepath.Base(path)
-			// Match *.test.yapi.yml or *.test.yapi.yaml
-			if strings.HasSuffix(base, ".test.yapi.yml") || strings.HasSuffix(base, ".test.yapi.yaml") {
-				testFiles = append(testFiles, path)
+
+			if all {
+				// Match *.yapi.yml or *.yapi.yaml (but not yapi.config.yml)
+				if (strings.HasSuffix(base, ".yapi.yml") || strings.HasSuffix(base, ".yapi.yaml")) &&
+					base != "yapi.config.yml" && base != "yapi.config.yaml" {
+					testFiles = append(testFiles, path)
+				}
+			} else {
+				// Match *.test.yapi.yml or *.test.yapi.yaml
+				if strings.HasSuffix(base, ".test.yapi.yml") || strings.HasSuffix(base, ".test.yapi.yaml") {
+					testFiles = append(testFiles, path)
+				}
 			}
 		}
 		return nil
 	})
 
 	return testFiles, err
+}
+
+func listE(cmd *cobra.Command, args []string) error {
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+
+	// Determine search directory
+	searchDir := "."
+	if len(args) > 0 {
+		searchDir = args[0]
+	}
+
+	// If no directory specified, try git-based discovery
+	// If directory specified, use file walk
+	var yapiFiles []string
+	var err error
+
+	if len(args) == 0 {
+		// Use tui.FindConfigFiles to get git-tracked yapi files
+		yapiFiles, err = tui.FindConfigFiles()
+		if err != nil {
+			// Fall back to file walk if not in git repo
+			yapiFiles, err = findAllYapiFiles(searchDir)
+		}
+	} else {
+		// Directory specified - use file walk
+		yapiFiles, err = findAllYapiFiles(searchDir)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find yapi files: %w", err)
+	}
+
+	if len(yapiFiles) == 0 {
+		if !jsonOutput {
+			fmt.Fprintf(os.Stderr, "%s\n", color.Yellow("No yapi config files found"))
+		}
+		return nil
+	}
+
+	// Sort files alphabetically
+	sort.Strings(yapiFiles)
+
+	// Output as JSON or text
+	if jsonOutput {
+		type fileEntry struct {
+			Path string `json:"path"`
+		}
+		entries := make([]fileEntry, len(yapiFiles))
+		for i, file := range yapiFiles {
+			entries[i].Path = file
+		}
+		output, _ := json.MarshalIndent(entries, "", "  ")
+		fmt.Println(string(output))
+	} else {
+		// Text output
+		fmt.Fprintf(os.Stderr, "%s\n\n", color.Accent(fmt.Sprintf("Found %d yapi config file(s):", len(yapiFiles))))
+		for _, file := range yapiFiles {
+			fmt.Println(file)
+		}
+	}
+
+	return nil
+}
+
+// findAllYapiFiles finds all *.yapi.yml files in the given directory (excluding yapi.config.yml)
+func findAllYapiFiles(dir string) ([]string, error) {
+	var yapiFiles []string
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) == ".yml" || filepath.Ext(path) == ".yaml" {
+			base := filepath.Base(path)
+			// Match *.yapi.yml or *.yapi.yaml (but not yapi.config.yml)
+			if (strings.HasSuffix(base, ".yapi.yml") || strings.HasSuffix(base, ".yapi.yaml")) &&
+				base != "yapi.config.yml" && base != "yapi.config.yaml" {
+				yapiFiles = append(yapiFiles, path)
+			}
+		}
+		return nil
+	})
+
+	return yapiFiles, err
+}
+
+// stressTestResult represents the result of a single stress test request
+type stressTestResult struct {
+	duration time.Duration
+	err      error
+}
+
+// promptStressTestConfirmation shows a confirmation prompt for stress testing
+func (app *rootCommand) promptStressTestConfirmation(filePath, envName string, parallel, numRequests int, duration time.Duration, useDuration bool) error {
+	// Load project and environment
+	projEnv, err := loadProjectAndEnv(filePath, envName, true)
+	if err != nil {
+		return err
+	}
+
+	// Read config file
+	configData, err := os.ReadFile(filePath) // #nosec G304 -- filePath is validated user-provided config file path
+	if err != nil {
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	// Build resolver with environment variables
+	var analysis *validation.Analysis
+	if projEnv != nil && projEnv.project != nil && projEnv.envVars != nil {
+		// Use AnalyzeConfigStringWithProject but temporarily override the default environment
+		// Save original default
+		originalDefault := projEnv.project.DefaultEnvironment
+		projEnv.project.DefaultEnvironment = projEnv.envName
+		analysis, err = validation.AnalyzeConfigStringWithProject(string(configData), projEnv.project, projEnv.projectRoot)
+		// Restore original default
+		projEnv.project.DefaultEnvironment = originalDefault
+	} else {
+		analysis, err = validation.AnalyzeConfigString(string(configData))
+	}
+	if err != nil {
+		return fmt.Errorf("failed to analyze config: %w", err)
+	}
+
+	// Get the resolved URL
+	var targetURL string
+	if analysis.Request != nil && analysis.Request.URL != "" {
+		targetURL = analysis.Request.URL
+	} else {
+		targetURL = "<unknown>"
+	}
+
+	// Show confirmation prompt
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "%s\n", color.Yellow("⚠️  Stress Test Confirmation"))
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "  %s %s\n", color.Dim("Target:"), color.Cyan(targetURL))
+	fmt.Fprintf(os.Stderr, "  %s %d threads\n", color.Dim("Threads:"), parallel)
+	if useDuration {
+		fmt.Fprintf(os.Stderr, "  %s %v\n", color.Dim("Duration:"), duration)
+		fmt.Fprintf(os.Stderr, "  %s unlimited (duration-based)\n", color.Dim("Requests:"))
+	} else {
+		fmt.Fprintf(os.Stderr, "  %s %d total (%d per thread)\n", color.Dim("Requests:"), numRequests, numRequests/parallel)
+	}
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "Are you sure you want to continue? [y/N]: ")
+
+	var response string
+	_, err = fmt.Scanln(&response)
+	if err != nil || (response != "y" && response != "Y" && response != "yes" && response != "YES") {
+		fmt.Fprintf(os.Stderr, "\n%s\n", color.Yellow("Stress test cancelled"))
+		return fmt.Errorf("cancelled")
+	}
+	fmt.Fprintf(os.Stderr, "\n")
+	return nil
+}
+
+// printStressTestResults calculates and prints stress test statistics
+func printStressTestResults(allResults []stressTestResult, startTime, stopTime time.Time, parallel, numRequests int, useDuration bool, duration time.Duration) error {
+	if len(allResults) == 0 {
+		return fmt.Errorf("no requests completed")
+	}
+
+	var durations []time.Duration
+	successCount := 0
+	failCount := 0
+	var totalDuration time.Duration
+
+	for _, r := range allResults {
+		durations = append(durations, r.duration)
+		totalDuration += r.duration
+		if r.err == nil {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+
+	// Sort durations for percentile calculations
+	sort.Slice(durations, func(i, j int) bool {
+		return durations[i] < durations[j]
+	})
+
+	totalTime := stopTime.Sub(startTime)
+	reqsPerSec := float64(len(allResults)) / totalTime.Seconds()
+
+	// Calculate percentiles
+	p50 := durations[len(durations)*50/100]
+	p90 := durations[len(durations)*90/100]
+	p95 := durations[len(durations)*95/100]
+	p99 := durations[len(durations)*99/100]
+	minDuration := durations[0]
+	maxDuration := durations[len(durations)-1]
+	avgDuration := totalDuration / time.Duration(len(durations))
+
+	// Print results
+	fmt.Fprintf(os.Stderr, "%s\n", color.Accent("Results:"))
+	fmt.Fprintf(os.Stderr, "\n")
+
+	// Configuration summary
+	if useDuration {
+		fmt.Fprintf(os.Stderr, "  %s\n", color.Dim(fmt.Sprintf("%d threads, %v duration, %d total requests", parallel, duration, len(allResults))))
+	} else {
+		requestsPerThread := numRequests / parallel
+		remainder := numRequests % parallel
+		if remainder > 0 {
+			fmt.Fprintf(os.Stderr, "  %s\n", color.Dim(fmt.Sprintf("%d threads, ~%d requests/thread, %d total requests", parallel, requestsPerThread, numRequests)))
+		} else {
+			fmt.Fprintf(os.Stderr, "  %s\n", color.Dim(fmt.Sprintf("%d threads, %d requests/thread, %d total requests", parallel, requestsPerThread, numRequests)))
+		}
+	}
+	fmt.Fprintf(os.Stderr, "  %s\n", color.Dim(fmt.Sprintf("Completed in %.2f seconds", totalTime.Seconds())))
+	fmt.Fprintf(os.Stderr, "\n")
+
+	fmt.Fprintf(os.Stderr, "  %s\n", color.Green(fmt.Sprintf("Success: %d (%.1f%%)", successCount, float64(successCount)*100/float64(len(allResults)))))
+	if failCount > 0 {
+		fmt.Fprintf(os.Stderr, "  %s\n", color.Red(fmt.Sprintf("Failed: %d (%.1f%%)", failCount, float64(failCount)*100/float64(len(allResults)))))
+	} else {
+		fmt.Fprintf(os.Stderr, "  %s\n", color.Dim(fmt.Sprintf("Failed: 0 (0.0%%)")))
+	}
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "  %s\n", color.Accent("Throughput:"))
+	fmt.Fprintf(os.Stderr, "    %.2f requests/second\n", reqsPerSec)
+	fmt.Fprintf(os.Stderr, "    %.2f ms/request (avg)\n", float64(avgDuration.Microseconds())/1000.0)
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "  %s\n", color.Accent("Latency:"))
+	fmt.Fprintf(os.Stderr, "    Min:  %v\n", minDuration.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "    Avg:  %v\n", avgDuration.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "    Max:  %v\n", maxDuration.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "  %s\n", color.Accent("Percentiles:"))
+	fmt.Fprintf(os.Stderr, "    50%%:  %v\n", p50.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "    90%%:  %v\n", p90.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "    95%%:  %v\n", p95.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "    99%%:  %v\n", p99.Round(time.Millisecond))
+
+	if failCount > 0 {
+		return fmt.Errorf("%d requests failed", failCount)
+	}
+
+	return nil
+}
+
+func (app *rootCommand) stressE(cmd *cobra.Command, args []string) error {
+	parallel, _ := cmd.Flags().GetInt("parallel")
+	numRequests, _ := cmd.Flags().GetInt("num-requests")
+	durationStr, _ := cmd.Flags().GetString("duration")
+	envName, _ := cmd.Flags().GetString("env")
+	skipConfirm, _ := cmd.Flags().GetBool("yes")
+
+	if parallel < 1 {
+		return fmt.Errorf("parallel must be at least 1")
+	}
+
+	// Handle TUI file selection when no args provided
+	filePath, _, err := selectConfigFile(args, "stress")
+	if err != nil {
+		return err
+	}
+
+	// Parse duration if provided
+	var duration time.Duration
+	var useDuration bool
+	if durationStr != "" {
+		var err error
+		duration, err = time.ParseDuration(durationStr)
+		if err != nil {
+			return fmt.Errorf("invalid duration: %w", err)
+		}
+		useDuration = true
+	} else {
+		if numRequests < 1 {
+			return fmt.Errorf("num-requests must be at least 1")
+		}
+	}
+
+	// Show confirmation prompt
+	if !skipConfirm {
+		if err := app.promptStressTestConfirmation(filePath, envName, parallel, numRequests, duration, useDuration); err != nil {
+			return nil
+		}
+	}
+
+	// Print header
+	fmt.Fprintf(os.Stderr, "%s\n", color.Accent("yapi stress test"))
+	fmt.Fprintf(os.Stderr, "%s\n", color.Dim("File: "+filePath))
+	if useDuration {
+		fmt.Fprintf(os.Stderr, "%s\n", color.Dim(fmt.Sprintf("Duration: %v, Concurrency: %d", duration, parallel)))
+	} else {
+		fmt.Fprintf(os.Stderr, "%s\n", color.Dim(fmt.Sprintf("Requests: %d, Concurrency: %d", numRequests, parallel)))
+	}
+	fmt.Fprintf(os.Stderr, "\n")
+
+	// Statistics tracking
+	results := make(chan stressTestResult, parallel)
+	var wg sync.WaitGroup
+
+	startTime := time.Now()
+	var stopTime time.Time
+
+	// Worker function
+	worker := func(requestCount *int64) {
+		defer wg.Done()
+		for {
+			// Check if we should stop
+			if useDuration {
+				if time.Since(startTime) >= duration {
+					return
+				}
+			} else {
+				if atomic.AddInt64(requestCount, 1) > int64(numRequests) {
+					return
+				}
+			}
+
+			// Execute request
+			reqStart := time.Now()
+			err := app.executeRunE(runContext{path: filePath, strict: false, envName: envName})
+			reqDuration := time.Since(reqStart)
+
+			results <- stressTestResult{duration: reqDuration, err: err}
+		}
+	}
+
+	// Start workers
+	var requestCount int64
+	for i := 0; i < parallel; i++ {
+		wg.Add(1)
+		go worker(&requestCount)
+	}
+
+	// Collect results in a separate goroutine
+	var allResults []stressTestResult
+	done := make(chan bool)
+	go func() {
+		for result := range results {
+			allResults = append(allResults, result)
+			// Print progress
+			if len(allResults)%10 == 0 || (!useDuration && len(allResults) == numRequests) {
+				elapsed := time.Since(startTime)
+				rps := float64(len(allResults)) / elapsed.Seconds()
+				fmt.Fprintf(os.Stderr, "\r%s %d requests in %v (%.2f req/s)",
+					color.Dim("Progress:"), len(allResults), elapsed.Round(time.Millisecond), rps)
+			}
+		}
+		done <- true
+	}()
+
+	// Wait for all workers to finish
+	wg.Wait()
+	stopTime = time.Now()
+	close(results)
+	<-done
+
+	fmt.Fprintf(os.Stderr, "\r%s\n\n", strings.Repeat(" ", 80)) // Clear progress line
+
+	// Print results and statistics
+	return printStressTestResults(allResults, startTime, stopTime, parallel, numRequests, useDuration, duration)
 }
 
 // isTerminal checks if the given file is a terminal (TTY)

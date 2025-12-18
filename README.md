@@ -85,64 +85,44 @@ make install
 
 **yapi** speaks many protocols. Here is how you define them.
 
-### 1\. HTTP with JSON Body
+### 1\. Request Chaining & Workflows
 
-No more escaping quotes in curl.
-
-```yaml
-yapi: v1
-url: https://api.example.com/posts
-method: POST
-content_type: application/json
-
-# yapi handles the JSON encoding for you
-body:
-  title: "Hello World"
-  tags:
-    - cli
-    - testing
-  author:
-    id: 123
-    active: true
-```
-
-### 2\. Environment Variables & Chaining
-
-Use shell environment variables directly. Perfect for CI/CD or keeping secrets out of git.
-
-```yaml
-yapi: v1
-url: https://api.example.com/secure-data
-method: GET
-
-headers:
-  Authorization: Bearer ${API_TOKEN}
-  X-Request-ID: ${REQUEST_ID:-default_id}
-```
-
-### 3\. Request Chaining
-
-Chain multiple requests together, referencing data from previous steps. Build authentication flows, integration tests, or multi-step workflows.
+Chain multiple requests together, passing data between steps. Build authentication flows, integration tests, or multi-step workflows.
 
 ```yaml
 yapi: v1
 chain:
-  - name: get_todo
-    url: https://jsonplaceholder.typicode.com/todos/1
-    method: GET
+  # Step 1: Login and get token
+  - name: login
+    url: https://api.example.com/auth/login
+    method: POST
+    body:
+      username: "dev_sheep"
+      password: ${PASSWORD}  # from environment
     expect:
       status: 200
       assert:
-        - .userId != null
-        - .id == 1
+        - .token != null
 
-  - name: get_user
-    url: https://jsonplaceholder.typicode.com/users/${get_todo.userId}
-    method: GET
+  # Step 2: Create a post using the token
+  - name: create_post
+    url: https://api.example.com/posts
+    method: POST
+    headers:
+      Authorization: Bearer ${login.token}
+    body:
+      title: "Hello World"
+      tags:
+        - cli
+        - testing
+      author:
+        id: 123
+        active: true
     expect:
-      status: 200
+      status: 201
       assert:
-        - .name != null
+        - .id != null
+        - .title == "Hello World"
 ```
 
 **Key features:**
@@ -151,9 +131,60 @@ chain:
 - Assertions use JQ expressions that must evaluate to true
 - Chains stop on first failure (fail-fast)
 
-### 4\. Assertions & Expectations
+### 2\. Environment Configuration
 
-Validate responses inline with JQ-powered assertions. No separate test framework needed.
+Manage multiple environments (dev, staging, prod) with a single config file. Create a `yapi.config.yml`:
+
+```yaml
+yapi: v1
+
+default_environment: local
+
+environments:
+  local:
+    url: http://localhost:3000
+    vars:
+      API_KEY: dev_key_123
+
+  prod:
+    url: https://api.example.com
+    vars:
+      API_KEY: ${PROD_API_KEY}  # from shell env
+    env_file: .env.prod         # load vars from file
+```
+
+Then reference in your requests:
+
+```yaml
+yapi: v1
+url: ${url}/api/v1/users
+method: GET
+headers:
+  Authorization: Bearer ${API_KEY}
+```
+
+Switch environments: `yapi run my-request.yapi.yml -e prod`
+
+### 3\. Simple HTTP Requests
+
+No more escaping quotes in curl. Just clean YAML.
+
+```yaml
+yapi: v1
+url: https://api.example.com/posts
+method: POST
+content_type: application/json
+
+body:
+  title: "Hello World"
+  tags:
+    - cli
+    - testing
+```
+
+### 4\. Advanced Assertions
+
+Validate complex response structures with JQ-powered assertions.
 
 ```yaml
 yapi: v1
@@ -253,6 +284,30 @@ Tired of `Alt-Tab` -\> `Up Arrow` -\> `Enter`? Use watch mode to re-run the requ
 yapi watch ./my-request.yapi.yml
 ```
 
+### 🔥 Load Testing
+
+Stress test **entire workflows** with concurrent execution. Not just individual requests - stress test multi-step chains, auth flows, and complex scenarios. Perfect for finding bottlenecks in real-world usage patterns.
+
+```bash
+# Stress test an auth flow: login -> create post -> fetch results
+yapi stress auth-flow.yapi.yml -n 1000 -p 50
+
+# Run a multi-step workflow for 30 seconds
+yapi stress my-workflow.yapi.yml -d 30s -p 10
+
+# Load test against production
+yapi stress checkout-flow.yapi.yml -e prod -n 500 -p 25
+```
+
+**Options:**
+- `-n, --num-requests` - Total number of workflow executions (default: 100)
+- `-p, --parallel` - Number of concurrent workflow executions (default: 1)
+- `-d, --duration` - Run for a specific duration (e.g., 10s, 1m) - overrides num-requests
+- `-e, --env` - Target a specific environment from yapi.config.yml
+- `-y, --yes` - Skip confirmation prompt
+
+**Key advantage:** Each parallel execution runs the **entire chain** - login, get token, make authenticated request, etc. This tests your API under realistic load, not just isolated endpoints.
+
 -----
 
 ## 🧠 Editor Integration (LSP)
@@ -296,6 +351,59 @@ Commands:
 ### VS Code / Any LSP-Compatible Editor
 
 The LSP communicates over stdio and works with any editor that supports the Language Server Protocol. Point your editor's LSP client to `yapi lsp` and you're set.
+
+-----
+
+## 🌍 Environment Management
+
+Create a `yapi.config.yml` file in your project root to manage multiple environments:
+
+```yaml
+yapi: v1
+
+default_environment: local
+
+environments:
+  local:
+    url: http://localhost:8080
+    vars:
+      API_KEY: local_test_key
+      DEBUG: "true"
+
+  staging:
+    url: https://staging.api.example.com
+    vars:
+      API_KEY: ${STAGING_KEY}  # From shell environment
+      DEBUG: "false"
+
+  prod:
+    url: https://api.example.com
+    vars:
+      API_KEY: ${PROD_KEY}
+      DEBUG: "false"
+```
+
+Then reference these variables in your request files:
+
+```yaml
+yapi: v1
+url: ${url}/users
+method: GET
+headers:
+  Authorization: Bearer ${API_KEY}
+  X-Debug: ${DEBUG}
+```
+
+Switch environments with the `-e` flag:
+```bash
+yapi run get-users.yapi.yml -e staging
+```
+
+**Benefits:**
+- Keep all environment configs in one place
+- Commit safe defaults, load secrets from shell env
+- No request file duplication across environments
+- Perfect for CI/CD pipelines with multiple deployment stages
 
 -----
 

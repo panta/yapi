@@ -3,7 +3,9 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"yapi.run/cli/internal/config"
@@ -56,7 +58,35 @@ func (e *Engine) RunConfig(
 	path string,
 	opts runner.Options,
 ) *RunConfigResult {
-	analysis, err := validation.AnalyzeConfigFile(path)
+	// Load project config if available for validation
+	var project *config.ProjectConfigV1
+	if opts.ProjectRoot != "" {
+		var err error
+		project, err = config.LoadProject(opts.ProjectRoot)
+		if err != nil {
+			// If user explicitly requested an environment via --env flag,
+			// they need to know if project loading failed
+			if opts.ProjectEnv != "" {
+				return &RunConfigResult{Error: fmt.Errorf("failed to load project config: %w", err)}
+			}
+			// Otherwise, ignore project load errors during validation - still run the config
+			project = nil
+		}
+	}
+
+	// Analyze with project context if available
+	var analysis *validation.Analysis
+	var err error
+	if project != nil {
+		data, readErr := os.ReadFile(path) // #nosec G304 -- path is validated user-provided config file path
+		if readErr != nil {
+			return &RunConfigResult{Error: readErr}
+		}
+		analysis, err = validation.AnalyzeConfigStringWithProject(string(data), project, opts.ProjectRoot)
+	} else {
+		analysis, err = validation.AnalyzeConfigFile(path)
+	}
+
 	if err != nil {
 		return &RunConfigResult{Error: err}
 	}
@@ -69,6 +99,33 @@ func (e *Engine) RunConfig(
 	if len(analysis.Chain) > 0 {
 		// For chains, return analysis only - caller handles execution
 		return &RunConfigResult{Analysis: analysis}
+	}
+
+	// Re-expand variables if EnvOverrides is provided
+	if len(opts.EnvOverrides) > 0 && analysis.Base != nil {
+		// Create a custom resolver with correct precedence order:
+		// 1. OS environment (highest priority - matches runner/context.go)
+		// 2. Project EnvOverrides
+		// 3. Empty string fallback
+		resolver := func(key string) (string, error) {
+			// 1. Check OS environment first (highest priority)
+			if val, ok := os.LookupEnv(key); ok {
+				return val, nil
+			}
+			// 2. Check project EnvOverrides
+			if val, ok := opts.EnvOverrides[key]; ok {
+				return val, nil
+			}
+			// 3. Return empty string (os.ExpandEnv behavior)
+			return "", nil
+		}
+
+		// Re-convert to domain request using custom resolver
+		req, err := analysis.Base.ToDomainWithResolver(resolver)
+		if err != nil {
+			return &RunConfigResult{Analysis: analysis, Error: err}
+		}
+		analysis.Request = req
 	}
 
 	if analysis.Request == nil {
@@ -89,7 +146,7 @@ func (e *Engine) RunConfig(
 	// Check expectations if present
 	var expectRes *runner.ExpectationResult
 	if result != nil && (analysis.Expect.Status != nil || len(analysis.Expect.Assert.Body) > 0 || len(analysis.Expect.Assert.Headers) > 0) {
-		expectRes = runner.CheckExpectations(analysis.Expect, result)
+		expectRes = runner.CheckExpectationsWithEnv(analysis.Expect, result, opts.EnvOverrides)
 	}
 
 	// Call hook with request stats (if configured)

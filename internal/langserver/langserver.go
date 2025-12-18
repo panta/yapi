@@ -3,6 +3,8 @@ package langserver
 
 import (
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/tliron/commonlog"
@@ -10,7 +12,9 @@ import (
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/tliron/glsp/server"
+	"gopkg.in/yaml.v3"
 	"yapi.run/cli/internal/compiler"
+	"yapi.run/cli/internal/config"
 	"yapi.run/cli/internal/constants"
 	"yapi.run/cli/internal/utils"
 	"yapi.run/cli/internal/validation"
@@ -26,8 +30,10 @@ var (
 )
 
 type document struct {
-	URI  protocol.DocumentUri
-	Text string
+	URI         protocol.DocumentUri
+	Text        string
+	ProjectRoot string                  // Path to project root (if found)
+	Project     *config.ProjectConfigV1 // Project config (if found)
 }
 
 // Run starts the yapi language server over stdio.
@@ -94,11 +100,23 @@ func textDocumentDidOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocument
 	uri := params.TextDocument.URI
 	text := params.TextDocument.Text
 
-	docs[uri] = &document{
+	doc := &document{
 		URI:  uri,
 		Text: text,
 	}
 
+	// Try to find and load project config
+	if filePath := uriToPath(uri); filePath != "" {
+		dirPath := filepath.Dir(filePath)
+		if projectRoot, err := config.FindProjectRoot(dirPath); err == nil {
+			doc.ProjectRoot = projectRoot
+			if project, err := config.LoadProject(projectRoot); err == nil {
+				doc.Project = project
+			}
+		}
+	}
+
+	docs[uri] = doc
 	validateAndNotify(ctx, uri, text)
 	return nil
 }
@@ -111,12 +129,25 @@ func textDocumentDidChange(ctx *glsp.Context, params *protocol.DidChangeTextDocu
 		text := params.ContentChanges[len(params.ContentChanges)-1].(protocol.TextDocumentContentChangeEventWhole).Text
 
 		if doc, ok := docs[uri]; ok {
+			// Update text but preserve project context
 			doc.Text = text
 		} else {
-			docs[uri] = &document{
+			// Create new document if it doesn't exist
+			doc := &document{
 				URI:  uri,
 				Text: text,
 			}
+			// Try to load project context
+			if filePath := uriToPath(uri); filePath != "" {
+				dirPath := filepath.Dir(filePath)
+				if projectRoot, err := config.FindProjectRoot(dirPath); err == nil {
+					doc.ProjectRoot = projectRoot
+					if project, err := config.LoadProject(projectRoot); err == nil {
+						doc.Project = project
+					}
+				}
+			}
+			docs[uri] = doc
 		}
 
 		validateAndNotify(ctx, uri, text)
@@ -145,7 +176,31 @@ func textDocumentDidSave(ctx *glsp.Context, params *protocol.DidSaveTextDocument
 }
 
 func validateAndNotify(ctx *glsp.Context, uri protocol.DocumentUri, text string) {
-	analysis, err := validation.AnalyzeConfigString(text)
+	// Check if this is a project config file
+	if filePath := uriToPath(uri); filePath != "" {
+		fileName := filepath.Base(filePath)
+		if fileName == "yapi.config.yml" || fileName == "yapi.config.yaml" {
+			// This is a project config file - validate it
+			validateProjectConfig(ctx, uri, text, filePath)
+			return
+		}
+	}
+
+	// Get document to access project context
+	doc, ok := docs[uri]
+	var analysis *validation.Analysis
+	var err error
+
+	// Use project-aware validation if available
+	if ok && doc.Project != nil {
+		analysis, err = validation.AnalyzeConfigStringWithProject(text, doc.Project, doc.ProjectRoot)
+	} else {
+		analysis, err = validation.AnalyzeConfigString(text)
+	}
+
+	if err != nil || analysis == nil {
+		analysis, err = validation.AnalyzeConfigString(text)
+	}
 	if err != nil {
 		// Catastrophic error - send one diagnostic and bail
 		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
@@ -223,6 +278,106 @@ func validateAndNotify(ctx *glsp.Context, uri protocol.DocumentUri, text string)
 		URI:         uri,
 		Diagnostics: diagnostics,
 	})
+}
+
+func validateProjectConfig(ctx *glsp.Context, uri protocol.DocumentUri, text string, filePath string) {
+	diagnostics := []protocol.Diagnostic{}
+
+	// Parse YAML first to catch syntax errors
+	var rawConfig map[string]any
+	if err := yaml.Unmarshal([]byte(text), &rawConfig); err != nil {
+		// Try to extract line number from error message
+		// Error format: "yaml: line X: ..."
+		line := protocol.UInteger(0)
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "line ") {
+			var lineNum int
+			if _, scanErr := fmt.Sscanf(errMsg, "yaml: line %d:", &lineNum); scanErr == nil && lineNum > 0 {
+				line = protocol.UInteger(lineNum - 1) // LSP uses 0-indexed lines
+			}
+		}
+
+		diagnostics = append(diagnostics, protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: line, Character: 0},
+				End:   protocol.Position{Line: line, Character: 100},
+			},
+			Severity: ptr(protocol.DiagnosticSeverityError),
+			Source:   ptr("yapi"),
+			Message:  fmt.Sprintf("YAML syntax error: %v", err),
+		})
+		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+			URI:         uri,
+			Diagnostics: diagnostics,
+		})
+		return
+	}
+
+	// Check required fields
+	if _, ok := rawConfig["yapi"]; !ok {
+		diagnostics = append(diagnostics, protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 0, Character: 0},
+				End:   protocol.Position{Line: 0, Character: 100},
+			},
+			Severity: ptr(protocol.DiagnosticSeverityError),
+			Source:   ptr("yapi"),
+			Message:  "Missing required field 'yapi' (e.g., yapi: v1)",
+		})
+	}
+
+	// Check if default_environment references a valid environment
+	if defaultEnv, ok := rawConfig["default_environment"].(string); ok && defaultEnv != "" {
+		if envs, hasEnvs := rawConfig["environments"].(map[string]any); hasEnvs {
+			if _, exists := envs[defaultEnv]; !exists {
+				// Get line number for default_environment
+				line := findFieldLineInText(text, "default_environment")
+				diagnostics = append(diagnostics, protocol.Diagnostic{
+					Range: protocol.Range{
+						Start: protocol.Position{Line: protocol.UInteger(line), Character: 0},
+						End:   protocol.Position{Line: protocol.UInteger(line), Character: 100},
+					},
+					Severity: ptr(protocol.DiagnosticSeverityError),
+					Source:   ptr("yapi"),
+					Message:  fmt.Sprintf("default_environment '%s' not found in environments", defaultEnv),
+				})
+			}
+		}
+	}
+
+	// Try to load the full project config for additional validation
+	projectRoot := filepath.Dir(filePath)
+	_, err := config.LoadProject(projectRoot)
+
+	if err != nil && len(diagnostics) == 0 {
+		// Only add this error if we haven't already added validation errors
+		diagnostics = append(diagnostics, protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 0, Character: 0},
+				End:   protocol.Position{Line: 0, Character: 100},
+			},
+			Severity: ptr(protocol.DiagnosticSeverityError),
+			Source:   ptr("yapi"),
+			Message:  fmt.Sprintf("Project config error: %v", err),
+		})
+	}
+
+	// Send diagnostics
+	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+		URI:         uri,
+		Diagnostics: diagnostics,
+	})
+}
+
+func findFieldLineInText(text string, fieldName string) int {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, fieldName+":") {
+			return i
+		}
+	}
+	return 0
 }
 
 func ptr[T any](v T) *T {
@@ -431,4 +586,16 @@ func textDocumentHover(ctx *glsp.Context, params *protocol.HoverParams) (*protoc
 	}
 
 	return nil, nil
+}
+
+// uriToPath converts a file:// URI to a filesystem path.
+func uriToPath(uri protocol.DocumentUri) string {
+	u, err := url.Parse(string(uri))
+	if err != nil {
+		return ""
+	}
+	if u.Scheme != "file" {
+		return ""
+	}
+	return u.Path
 }

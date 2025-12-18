@@ -1,5 +1,6 @@
 yapi: v1
-url: http://localhost:3000/sitemap.xml
+path: /icon
 method: GET
 expect:
   status: 200
+output_file: ./icon.svg

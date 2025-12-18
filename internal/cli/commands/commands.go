@@ -10,6 +10,7 @@ type Config struct {
 	URLOverride  string
 	NoColor      bool
 	BinaryOutput bool
+	Environment  string // Target environment from project config
 }
 
 // Handlers contains the callback functions for command execution
@@ -23,6 +24,8 @@ type Handlers struct {
 	Validate       func(cmd *cobra.Command, args []string) error
 	Share          func(cmd *cobra.Command, args []string) error
 	Test           func(cmd *cobra.Command, args []string) error
+	List           func(cmd *cobra.Command, args []string) error
+	Stress         func(cmd *cobra.Command, args []string) error
 }
 
 // BuildRoot builds the root command tree with optional handlers.
@@ -63,6 +66,9 @@ var cmdManifest = []CommandSpec{
 		Use:   "run [file]",
 		Short: "Run a request defined in a yapi config file (reads from stdin if no file specified)",
 		Args:  cobra.MaximumNArgs(1),
+		Flags: []FlagSpec{
+			{Name: "env", Shorthand: "e", Type: "string", Default: "", Usage: "Target environment from yapi.config.yml"},
+		},
 	},
 	{
 		Use:   "watch [file]",
@@ -71,6 +77,7 @@ var cmdManifest = []CommandSpec{
 		Flags: []FlagSpec{
 			{Name: "pretty", Shorthand: "p", Type: "bool", Default: false, Usage: "Enable pretty TUI mode"},
 			{Name: "no-pretty", Type: "bool", Default: false, Usage: "Disable pretty TUI mode"},
+			{Name: "env", Shorthand: "e", Type: "string", Default: "", Usage: "Target environment from yapi.config.yml"},
 		},
 	},
 	{
@@ -111,7 +118,31 @@ var cmdManifest = []CommandSpec{
 		Short: "Run all *.test.yapi.yml files in the current directory or specified directory",
 		Args:  cobra.MaximumNArgs(1),
 		Flags: []FlagSpec{
+			{Name: "all", Shorthand: "a", Type: "bool", Default: false, Usage: "Run all *.yapi.yml files (not just *.test.yapi.yml)"},
 			{Name: "verbose", Shorthand: "v", Type: "bool", Default: false, Usage: "Show verbose output for each test"},
+			{Name: "env", Shorthand: "e", Type: "string", Default: "", Usage: "Target environment from yapi.config.yml"},
+		},
+	},
+	{
+		Use:     "list [directory]",
+		Aliases: []string{"ls"},
+		Short:   "List all yapi config files in the current directory or project",
+		Args:    cobra.MaximumNArgs(1),
+		Flags: []FlagSpec{
+			{Name: "json", Type: "bool", Default: false, Usage: "Output as JSON"},
+		},
+	},
+	{
+		Use:     "stress [file]",
+		Aliases: []string{"pwn"},
+		Short:   "Load test a yapi config file with concurrent requests",
+		Args:    cobra.MaximumNArgs(1),
+		Flags: []FlagSpec{
+			{Name: "parallel", Shorthand: "p", Type: "int", Default: 1, Usage: "Number of concurrent requests"},
+			{Name: "num-requests", Shorthand: "n", Type: "int", Default: 100, Usage: "Total number of requests to make"},
+			{Name: "duration", Shorthand: "d", Type: "string", Default: "", Usage: "Duration to run test (e.g., 10s, 1m) - overrides num-requests"},
+			{Name: "env", Shorthand: "e", Type: "string", Default: "", Usage: "Target environment from yapi.config.yml"},
+			{Name: "yes", Shorthand: "y", Type: "bool", Default: false, Usage: "Skip confirmation prompt"},
 		},
 	},
 }
@@ -149,6 +180,10 @@ func getHandler(h *Handlers, use string) func(*cobra.Command, []string) error {
 		return h.Share
 	case "test":
 		return h.Test
+	case "list":
+		return h.List
+	case "stress":
+		return h.Stress
 	default:
 		return nil
 	}
