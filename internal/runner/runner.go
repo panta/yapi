@@ -321,7 +321,7 @@ func formatAssertionError(detail *filter.AssertionDetail) string {
 	}
 
 	// If we have detailed information about the comparison, use it
-	if detail.LeftSide != "" && detail.Operator != "" && detail.ActualValue != "" {
+	if detail.LeftSide != "" && detail.Operator != "" {
 		var operatorDesc string
 		switch detail.Operator {
 		case "==":
@@ -340,12 +340,18 @@ func formatAssertionError(detail *filter.AssertionDetail) string {
 			operatorDesc = detail.Operator
 		}
 
-		return fmt.Sprintf("assertion failed: expected %s %s %s, but got %s\n  Expression: %s",
+		// Build the error message with available information
+		msg := fmt.Sprintf("assertion failed\n  Expected: %s %s %s",
 			detail.LeftSide,
 			operatorDesc,
-			detail.ExpectedValue,
-			detail.ActualValue,
-			detail.Expression)
+			detail.ExpectedValue)
+
+		if detail.ActualValue != "" {
+			msg += fmt.Sprintf("\n  Actual:   %s = %s", detail.LeftSide, detail.ActualValue)
+		}
+
+		msg += fmt.Sprintf("\n  Expression: %s", detail.Expression)
+		return msg
 	}
 
 	// Fallback to basic error message
