@@ -59,10 +59,11 @@ func init() {
 }
 
 type rootCommand struct {
-	urlOverride string
-	noColor     bool
-	httpClient  *http.Client
-	engine      *core.Engine
+	urlOverride  string
+	noColor      bool
+	binaryOutput bool
+	httpClient   *http.Client
+	engine       *core.Engine
 }
 
 // ValidationError provides specific information about validation failures.
@@ -119,6 +120,7 @@ func main() {
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		app.urlOverride = cfg.URLOverride
 		app.noColor = cfg.NoColor
+		app.binaryOutput = cfg.BinaryOutput
 		color.SetNoColor(app.noColor)
 	}
 	rootCmd.PersistentPostRun = func(cmd *cobra.Command, args []string) {
@@ -242,8 +244,21 @@ type runContext struct {
 // printResult outputs a single result with optional expectation.
 func (app *rootCommand) printResult(result *runner.Result, expectRes *runner.ExpectationResult) {
 	if result != nil {
-		body := strings.TrimRight(output.Highlight(result.Body, result.ContentType, app.noColor), "\n\r")
-		fmt.Println(body)
+		// Check if stdout is a TTY (terminal)
+		isTTY := isTerminal(os.Stdout)
+
+		// Check if content is binary
+		isBinary := isBinaryContent(result.Body)
+
+		// Skip dumping binary to terminal unless explicitly requested or piping
+		if isBinary && isTTY && !app.binaryOutput {
+			fmt.Fprintf(os.Stderr, "\n%s\n", color.Yellow("Binary content detected. Output hidden to prevent terminal corruption."))
+			fmt.Fprintf(os.Stderr, "%s\n", color.Dim("To display binary output, use --binary-output flag or pipe to a file."))
+		} else {
+			body := strings.TrimRight(output.Highlight(result.Body, result.ContentType, app.noColor), "\n\r")
+			fmt.Println(body)
+		}
+
 		printResultMeta(result)
 	}
 	if expectRes != nil {
@@ -255,8 +270,9 @@ func (app *rootCommand) printResult(result *runner.Result, expectRes *runner.Exp
 // Returns error for middleware to capture.
 func (app *rootCommand) executeRunE(ctx runContext) error {
 	opts := runner.Options{
-		URLOverride: app.urlOverride,
-		NoColor:     app.noColor,
+		URLOverride:  app.urlOverride,
+		NoColor:      app.noColor,
+		BinaryOutput: app.binaryOutput,
 	}
 
 	runRes := app.engine.RunConfig(context.Background(), ctx.path, opts)
@@ -774,4 +790,48 @@ func reconstructCommand(cmd *cobra.Command, args []string) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// isTerminal checks if the given file is a terminal (TTY)
+func isTerminal(f *os.File) bool {
+	stat, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// isBinaryContent checks if content appears to be binary data
+func isBinaryContent(content string) bool {
+	if len(content) == 0 {
+		return false
+	}
+
+	// Check for null bytes - strong indicator of binary content
+	for i := 0; i < len(content); i++ {
+		if content[i] == 0 {
+			return true
+		}
+	}
+
+	// Sample first 8KB or the entire content, whichever is smaller
+	sampleSize := 8192
+	if len(content) < sampleSize {
+		sampleSize = len(content)
+	}
+
+	nonPrintable := 0
+	for i := 0; i < sampleSize; i++ {
+		c := content[i]
+		// Count non-printable characters (excluding common whitespace)
+		if c < 32 && c != '\t' && c != '\n' && c != '\r' {
+			nonPrintable++
+		} else if c > 126 && c < 128 {
+			nonPrintable++
+		}
+	}
+
+	// If more than 30% of sampled bytes are non-printable, consider it binary
+	threshold := float64(sampleSize) * 0.3
+	return float64(nonPrintable) > threshold
 }

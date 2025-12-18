@@ -31,8 +31,9 @@ type Result struct {
 
 // Options for execution
 type Options struct {
-	URLOverride string
-	NoColor     bool
+	URLOverride  string
+	NoColor      bool
+	BinaryOutput bool
 }
 
 // Run executes a yapi request and returns the result.

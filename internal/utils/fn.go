@@ -70,3 +70,40 @@ func DeepCloneSlice(src []any) []any {
 	}
 	return dst
 }
+
+// IsBinaryContent checks if the given content appears to be binary data.
+// It uses a simple heuristic: if the content contains null bytes or has
+// a high percentage of non-printable characters, it's likely binary.
+func IsBinaryContent(content string) bool {
+	if len(content) == 0 {
+		return false
+	}
+
+	// Check for null bytes - strong indicator of binary content
+	for i := 0; i < len(content); i++ {
+		if content[i] == 0 {
+			return true
+		}
+	}
+
+	// Sample first 8KB or the entire content, whichever is smaller
+	sampleSize := 8192
+	if len(content) < sampleSize {
+		sampleSize = len(content)
+	}
+
+	nonPrintable := 0
+	for i := 0; i < sampleSize; i++ {
+		c := content[i]
+		// Count non-printable characters (excluding common whitespace)
+		if c < 32 && c != '\t' && c != '\n' && c != '\r' {
+			nonPrintable++
+		} else if c > 126 && c < 128 {
+			nonPrintable++
+		}
+	}
+
+	// If more than 30% of sampled bytes are non-printable, consider it binary
+	threshold := float64(sampleSize) * 0.3
+	return float64(nonPrintable) > threshold
+}
