@@ -6,3 +6,6 @@ yapi pwn -p8 -n100 ./my-shit-endpoint.yapi.yml
 - better lsp in general
 - fix website more for mobile
 - better blog posts
+
+- be able to assert/warn about performance (request took took too long, payload was too big)
+- `yapi monitor` and it will monitor uptime.
