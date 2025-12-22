@@ -1,4 +1,4 @@
-.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all lint lint-install install-lint lint-quick lint-full gen-docs
+.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all lint lint-install install-lint lint-quick lint-full gen-docs gh-action fuzz-cover
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -101,10 +101,19 @@ bump-major:
 	@./scripts/bump.sh major
 
 release:
+	@echo "Pushing commits and tags to origin..."
+	@git push origin HEAD
 	@TAG=$$(git describe --tags --abbrev=0); \
-	echo "Pushing $$TAG to origin..."; \
+	echo "Pushing tag $$TAG..."; \
 	git push origin "$$TAG"
+	@echo "Release complete!"
 
 gen-docs:
 	@echo "Generating CLI documentation..."
 	@go run scripts/gendocs.go
+
+
+gh-action:
+	@echo "Running tests for GitHub Actions..."
+	act -W .github/workflows/webapp-dev.yml \
+		--container-architecture linux/amd64

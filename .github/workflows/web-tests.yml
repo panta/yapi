@@ -1,0 +1,88 @@
+name: Web Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'web/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - '.github/workflows/web-integration-tests.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'web/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - '.github/workflows/web-integration-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Unit Tests & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build madea-blog-core
+        run: pnpm --filter madea-blog-core build
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Build web
+        run: pnpm build:web
+
+  integration-tests:
+    name: Integration Tests (yapi)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install & Build Web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter madea-blog-core build
+          pnpm build:web
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build & Install Yapi CLI
+        run: |
+          make build
+          sudo cp ./bin/yapi /usr/local/bin/yapi
+          yapi version
+
+      - name: Run yapi integration tests
+        uses: ./action  # jamierpond/yapi/action@main
+        with:
+          version: local
+          start: pnpm --filter web start --port 3000
+          wait-on: http://localhost:3000/healthz
+          command: yapi test ./web/yapi -a -p 16
