@@ -332,7 +332,7 @@ jobs:
         run: npm install
 
       - name: Run Yapi Integration Tests
-        uses: jamierpond/yapi-action@v1
+        uses: jamierpond/yapi/action@0.X.X # specify version, or use @main for latest
         with:
           # Start your service in the background
           start: npm run dev
@@ -352,7 +352,7 @@ jobs:
 
 **Multiple services example:**
 ```yaml
-- uses: jamierpond/yapi-action@v1
+- uses: jamierpond/yapi/action@0.X.X # specify version, or use @main for latest
   with:
     start: |
       docker-compose up -d
