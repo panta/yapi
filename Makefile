@@ -115,5 +115,5 @@ gen-docs:
 
 gh-action:
 	@echo "Running tests for GitHub Actions..."
-	act -W .github/workflows/webapp-dev.yml \
+	act -W .github/workflows/web-tests.yml \
 		--container-architecture linux/amd64

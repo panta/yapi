@@ -12,6 +12,7 @@ async function run(): Promise<void> {
     const waitUrls = core.getMultilineInput('wait-on');
     const timeout = parseInt(core.getInput('wait-on-timeout') || '60000', 10);
     const command = core.getInput('command') || 'yapi run .';
+    const skipInstall = core.getBooleanInput('skip-install');
 
     // Get version from the action ref (e.g., 'v0.5.0' or 'main')
     const actionRef = process.env.GITHUB_ACTION_REF || 'main';
@@ -20,39 +21,51 @@ async function run(): Promise<void> {
     // -------------------------------------------------------------------------
     // 2. INSTALL YAPI
     // -------------------------------------------------------------------------
-    // Check if yapi is already installed
-    let yapiInstalled = false;
-    try {
-      await exec.exec('yapi', ['version'], { silent: true });
-      yapiInstalled = true;
-    } catch {
-      yapiInstalled = false;
-    }
-
-    if (yapiInstalled) {
-      core.startGroup('Using pre-installed Yapi');
-      await exec.exec('yapi', ['version']);
+    if (skipInstall) {
+      core.startGroup('Verifying pre-installed Yapi');
+      try {
+        await exec.exec('yapi', ['version']);
+        core.info('Using local/pre-installed yapi');
+      } catch {
+        core.setFailed('skip-install is enabled but yapi is not found in PATH. Please install yapi before running this action.');
+        process.exit(1);
+      }
       core.endGroup();
     } else {
-      core.startGroup(`Installing Yapi ${version}`);
-
-      // Use the unified install script that works across platforms
-      let installCmd = 'curl -fsSL https://yapi.run/install/linux.sh | bash';
-
-      // If a specific version is requested (not 'latest'), set YAPI_VERSION env var
-      if (version !== 'latest') {
-        core.info(`Installing yapi version: ${version}`);
-        installCmd = `curl -fsSL https://yapi.run/install/linux.sh | YAPI_VERSION=${version} bash`;
+      // Check if yapi is already installed
+      let yapiInstalled = false;
+      try {
+        await exec.exec('yapi', ['version'], { silent: true });
+        yapiInstalled = true;
+      } catch {
+        yapiInstalled = false;
       }
 
-      // Use sh -c to properly handle the pipe operator
-      await exec.exec('sh', ['-c', installCmd]);
+      if (yapiInstalled) {
+        core.startGroup('Using pre-installed Yapi');
+        await exec.exec('yapi', ['version']);
+        core.endGroup();
+      } else {
+        core.startGroup(`Installing Yapi ${version}`);
 
-      // Add yapi to PATH for the rest of this step
-      const yapiPath = `${process.env.HOME}/.yapi/bin`;
-      core.addPath(yapiPath);
+        // Use the unified install script that works across platforms
+        let installCmd = 'curl -fsSL https://yapi.run/install/linux.sh | bash';
 
-      core.endGroup();
+        // If a specific version is requested (not 'latest'), set YAPI_VERSION env var
+        if (version !== 'latest') {
+          core.info(`Installing yapi version: ${version}`);
+          installCmd = `curl -fsSL https://yapi.run/install/linux.sh | YAPI_VERSION=${version} bash`;
+        }
+
+        // Use sh -c to properly handle the pipe operator
+        await exec.exec('sh', ['-c', installCmd]);
+
+        // Add yapi to PATH for the rest of this step
+        const yapiPath = `${process.env.HOME}/.yapi/bin`;
+        core.addPath(yapiPath);
+
+        core.endGroup();
+      }
     }
 
     // -------------------------------------------------------------------------

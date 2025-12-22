@@ -27,6 +27,11 @@ inputs:
     required: false
     default: 'yapi run .'
 
+  skip-install:
+    description: 'Skip yapi installation and use pre-installed version (useful when building from source)'
+    required: false
+    default: 'false'
+
 runs:
   using: 'node20'
   main: 'dist/index.js'
