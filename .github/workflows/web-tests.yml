@@ -7,14 +7,14 @@ on:
       - 'web/**'
       - 'cmd/**'
       - 'internal/**'
-      - '.github/workflows/web-integration-tests.yml'
+      - '.github/workflows/web-tests.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'web/**'
       - 'cmd/**'
       - 'internal/**'
-      - '.github/workflows/web-integration-tests.yml'
+      - '.github/workflows/web-tests.yml'
   workflow_dispatch:
 
 jobs:
