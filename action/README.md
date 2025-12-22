@@ -4,7 +4,15 @@ Run [Yapi](https://yapi.run) integration tests in GitHub Actions with automatic 
 
 ## Usage
 
-**Use a specific version tag:**
+**Use the latest version from main:**
+
+```yaml
+- uses: jamierpond/yapi-action@main
+  with:
+    command: yapi test ./tests
+```
+
+**Or use a specific version tag:**
 
 ```yaml
 - uses: jamierpond/yapi-action@v0.5.0
