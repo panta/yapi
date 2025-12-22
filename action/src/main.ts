@@ -12,36 +12,37 @@ async function run(): Promise<void> {
     const waitUrls = core.getMultilineInput('wait-on');
     const timeout = parseInt(core.getInput('wait-on-timeout') || '60000', 10);
     const command = core.getInput('command') || 'yapi run .';
-    const version = core.getInput('version') || 'latest';
+
+    // Get version from the action ref (e.g., 'v0.5.0' or 'main')
+    const actionRef = process.env.GITHUB_ACTION_REF || 'main';
+    const version = actionRef === 'main' ? 'latest' : actionRef;
 
     // -------------------------------------------------------------------------
     // 2. INSTALL YAPI
     // -------------------------------------------------------------------------
-    if (version === 'local') {
-      core.startGroup('Verifying local Yapi installation');
-      core.info('Using pre-installed yapi (version: local)');
+    // Check if yapi is already installed
+    let yapiInstalled = false;
+    try {
+      await exec.exec('yapi', ['version'], { silent: true });
+      yapiInstalled = true;
+    } catch {
+      yapiInstalled = false;
+    }
 
-      try {
-        await exec.exec('yapi', ['version']);
-        core.info('Local yapi installation verified successfully');
-      } catch (error) {
-        throw new Error('version set to "local" but yapi is not installed or not in PATH');
-      }
-
+    if (yapiInstalled) {
+      core.startGroup('Using pre-installed Yapi');
+      await exec.exec('yapi', ['version']);
       core.endGroup();
     } else {
-      core.startGroup('Installing Yapi');
+      core.startGroup(`Installing Yapi ${version}`);
 
       // Use the unified install script that works across platforms
-      const installCmd = 'curl -fsSL https://yapi.run/install/linux.sh | bash';
+      let installCmd = 'curl -fsSL https://yapi.run/install/linux.sh | bash';
 
-      // If a specific version is requested (not 'latest'), we'll need to handle it
-      // The install script installs the latest by default
+      // If a specific version is requested (not 'latest'), set YAPI_VERSION env var
       if (version !== 'latest') {
-        core.info(`Requesting specific version: ${version}`);
-        // The install.sh script may support YAPI_VERSION env var or similar
-        // For now, we'll install latest and note this limitation
-        core.warning('Version selection not yet implemented - installing latest');
+        core.info(`Installing yapi version: ${version}`);
+        installCmd = `curl -fsSL https://yapi.run/install/linux.sh | YAPI_VERSION=${version} bash`;
       }
 
       // Use sh -c to properly handle the pipe operator

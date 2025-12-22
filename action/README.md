@@ -7,7 +7,7 @@ Run [Yapi](https://yapi.run) integration tests in GitHub Actions with automatic 
 **Use the latest version from main:**
 
 ```yaml
-- uses: jamierpond/yapi-action@main
+- uses: jamierpond/yapi/action@main
   with:
     command: yapi test ./tests
 ```
@@ -15,10 +15,12 @@ Run [Yapi](https://yapi.run) integration tests in GitHub Actions with automatic 
 **Or use a specific version tag:**
 
 ```yaml
-- uses: jamierpond/yapi-action@v0.5.0
+- uses: jamierpond/yapi/action@v0.5.0
   with:
     command: yapi test ./tests
 ```
+
+The action automatically installs the matching yapi version based on the action ref you use. For example, `@v0.5.0` installs yapi v0.5.0, while `@main` installs the latest version.
 
 ### Basic Example
 
@@ -32,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: jamierpond/yapi-action@v0.5.0
+      - uses: jamierpond/yapi/action@v0.5.0
         with:
           command: yapi test ./tests
 ```
@@ -40,7 +42,7 @@ jobs:
 ### With Background Service
 
 ```yaml
-- uses: jamierpond/yapi-action@v0.5.0
+- uses: jamierpond/yapi/action@v0.5.0
   with:
     start: npm run dev
     wait-on: http://localhost:3000/health
@@ -50,7 +52,7 @@ jobs:
 ### Multiple Services
 
 ```yaml
-- uses: jamierpond/yapi-action@v0.5.0
+- uses: jamierpond/yapi/action@v0.5.0
   with:
     start: |
       npm run api
@@ -69,7 +71,6 @@ jobs:
 | `start` | No | `""` | Commands to run in background (one per line) |
 | `wait-on` | No | `""` | URLs to wait for before running tests (one per line) |
 | `wait-on-timeout` | No | `60000` | Health check timeout in milliseconds |
-| `version` | No | `latest` | Yapi version to install (`latest`, `v0.5.0`, or `local`) |
 
 ## How It Works
 

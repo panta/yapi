@@ -27,11 +27,6 @@ inputs:
     required: false
     default: 'yapi run .'
 
-  version:
-    description: 'Version of yapi to install'
-    required: false
-    default: 'latest'
-
 runs:
   using: 'node20'
   main: 'dist/index.js'
