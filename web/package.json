@@ -2,6 +2,7 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently -n next,madea -c cyan,magenta \"next dev\" \"pnpm --filter madea-blog-core dev\"",
     "build": "next build",
