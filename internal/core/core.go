@@ -82,7 +82,17 @@ func (e *Engine) RunConfig(
 		if readErr != nil {
 			return &RunConfigResult{Error: readErr}
 		}
-		analysis, err = validation.AnalyzeConfigStringWithProject(string(data), project, opts.ProjectRoot)
+
+		// If a specific environment was requested, temporarily override the default
+		// This ensures the correct environment is used for URL resolution and defaults
+		if opts.ProjectEnv != "" {
+			originalDefault := project.DefaultEnvironment
+			project.DefaultEnvironment = opts.ProjectEnv
+			analysis, err = validation.AnalyzeConfigStringWithProject(string(data), project, opts.ProjectRoot)
+			project.DefaultEnvironment = originalDefault
+		} else {
+			analysis, err = validation.AnalyzeConfigStringWithProject(string(data), project, opts.ProjectRoot)
+		}
 	} else {
 		analysis, err = validation.AnalyzeConfigFile(path)
 	}

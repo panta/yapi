@@ -263,9 +263,10 @@ func printWatchHeader(path string) {
 
 // runContext holds options for executeRun
 type runContext struct {
-	path    string
-	strict  bool   // If true, return error on failures; if false, print and return nil
-	envName string // Target environment from yapi.config.yml
+	path         string
+	strict       bool   // If true, return error on failures; if false, print and return nil
+	returnErrors bool   // If true, return errors even when strict is false (for stress tests)
+	envName      string // Target environment from yapi.config.yml
 }
 
 // printResult outputs a single result with optional expectation.
@@ -308,7 +309,7 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 	// Load project and environment configuration
 	projEnv, err := loadProjectAndEnv(ctx.path, ctx.envName, true)
 	if err != nil {
-		if ctx.strict {
+		if ctx.strict || ctx.returnErrors {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "%s\n", color.Red(err.Error()))
@@ -328,7 +329,7 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 
 	// Handle validation/parse errors first
 	if runRes.Error != nil && runRes.Analysis == nil {
-		if ctx.strict {
+		if ctx.strict || ctx.returnErrors {
 			return runRes.Error
 		}
 		fmt.Println(color.Red(runRes.Error.Error()))
@@ -338,7 +339,7 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 	out, noColor := app.io(ctx.strict)
 	validation.PrintErrors(runRes.Analysis, out, noColor)
 	if runRes.Analysis != nil && runRes.Analysis.HasErrors() {
-		if ctx.strict {
+		if ctx.strict || ctx.returnErrors {
 			return &validation.Error{Diagnostics: runRes.Analysis.Diagnostics}
 		}
 		return nil
@@ -361,7 +362,7 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 		}
 
 		if chainErr != nil {
-			if ctx.strict {
+			if ctx.strict || ctx.returnErrors {
 				return chainErr
 			}
 			fmt.Println(color.Red(chainErr.Error()))
@@ -384,7 +385,7 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 	app.printResult(runRes.Result, runRes.ExpectRes)
 
 	if runRes.Error != nil {
-		if ctx.strict {
+		if ctx.strict || ctx.returnErrors {
 			return runRes.Error
 		}
 		fmt.Println(color.Red(runRes.Error.Error()))
@@ -1454,9 +1455,9 @@ func (app *rootCommand) stressE(cmd *cobra.Command, args []string) error {
 				}
 			}
 
-			// Execute request
+			// Execute request (returnErrors: true ensures errors are captured for counting)
 			reqStart := time.Now()
-			err := app.executeRunE(runContext{path: filePath, strict: false, envName: envName})
+			err := app.executeRunE(runContext{path: filePath, strict: false, returnErrors: true, envName: envName})
 			reqDuration := time.Since(reqStart)
 
 			results <- stressTestResult{duration: reqDuration, err: err}
