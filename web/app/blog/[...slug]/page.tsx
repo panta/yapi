@@ -1,8 +1,7 @@
 import { renderMadeaBlogPage } from "madea-blog-core";
 import { createBlogConfig, generateBlogArticleMetadata } from "../madea.config";
 
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+export const revalidate = 600; // Cache for 10 minutes
 
 const CONFIG = createBlogConfig();
 
