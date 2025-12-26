@@ -1,0 +1,8 @@
+# Test HTTP timeout with a request that completes in time
+yapi: v1
+url: https://httpbin.org/delay/1
+method: GET
+timeout: 3s
+
+expect:
+  status: 200

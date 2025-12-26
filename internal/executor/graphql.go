@@ -38,10 +38,11 @@ func GraphQLTransport(client HTTPClient) TransportFunc {
 
 		// Create a new request for HTTP execution
 		httpReq := &domain.Request{
-			URL:     req.URL,
-			Method:  "POST",
-			Headers: req.Headers,
-			Body:    strings.NewReader(string(jsonBytes)),
+			URL:      req.URL,
+			Method:   "POST",
+			Headers:  req.Headers,
+			Body:     strings.NewReader(string(jsonBytes)),
+			Metadata: req.Metadata, // Preserve metadata (including timeout)
 		}
 		if httpReq.Headers == nil {
 			httpReq.Headers = make(map[string]string)

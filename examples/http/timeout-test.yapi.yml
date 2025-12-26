@@ -1,0 +1,10 @@
+# Test HTTP timeout functionality
+# This request should timeout if the server takes longer than 2s to respond
+yapi: v1
+url: https://httpbin.org/delay/5
+method: GET
+timeout: 2s
+
+expect:
+  # This will fail due to timeout, but that's expected
+  status: 200

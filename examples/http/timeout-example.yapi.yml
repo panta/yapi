@@ -1,0 +1,15 @@
+# HTTP Timeout Example
+# Demonstrates how to use timeouts to prevent requests from hanging
+yapi: v1
+
+url: https://httpbin.org/delay/2
+method: GET
+
+# Request will timeout if it takes longer than 5 seconds
+# This request will succeed since it only takes 2 seconds
+timeout: 5s
+
+expect:
+  status: 200
+  assert:
+    - .url != null

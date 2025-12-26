@@ -24,6 +24,7 @@ Every yapi request is defined in a YAML file with the `.yapi.yml` or `.yapi.yaml
 yapi: v1
 url: https://api.example.com/endpoint
 method: GET  # GET, POST, PUT, PATCH, DELETE
+timeout: 4s  # Optional: Request timeout (e.g., "4s", "100ms", "1m")
 headers:
   Authorization: Bearer ${TOKEN}
 body:
@@ -232,6 +233,60 @@ rpc: SayHello
 body:
   name: "World"
 ```
+
+## Request Timeouts
+
+Configure timeouts for HTTP and GraphQL requests using duration strings:
+
+```yaml
+yapi: v1
+url: https://api.example.com/slow-endpoint
+method: GET
+timeout: 5s  # Timeout after 5 seconds
+```
+
+**Supported duration formats:**
+- `"100ms"` - Milliseconds
+- `"4s"` - Seconds
+- `"1m"` - Minutes
+- `"1m30s"` - Combination
+
+**Timeouts in chains:**
+
+Each step in a chain can have its own timeout, and steps inherit the global timeout if not specified:
+
+```yaml
+yapi: v1
+
+# Global timeout applies to all steps by default
+timeout: 10s
+
+chain:
+  # Step 1: Override with shorter timeout
+  - name: fast_check
+    url: https://api.example.com/health
+    timeout: 2s
+    expect:
+      status: 200
+
+  # Step 2: Uses global timeout (10s)
+  - name: normal_request
+    url: https://api.example.com/data
+    expect:
+      status: 200
+
+  # Step 3: Override with longer timeout
+  - name: slow_operation
+    url: https://api.example.com/process
+    timeout: 30s
+    expect:
+      status: 200
+```
+
+**When a timeout occurs:**
+- HTTP/GraphQL requests will fail with `context deadline exceeded` error
+- The chain will stop execution (fail-fast behavior)
+- Use timeouts to prevent hanging on slow or unresponsive endpoints
 
 ## Project Structure Best Practices
 

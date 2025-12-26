@@ -45,6 +45,7 @@ var knownV1Keys = map[string]bool{
 	"expect":           true,
 	"delay":            true,
 	"output_file":      true,
+	"timeout":          true,
 }
 
 // FindUnknownKeys checks a raw map for keys not in knownV1Keys.
@@ -87,7 +88,8 @@ type ConfigV1 struct {
 	CloseAfterSend bool              `yaml:"close_after_send,omitempty"`
 
 	// Flow control
-	Delay string `yaml:"delay,omitempty"` // Wait before executing this step (e.g. "5s", "500ms")
+	Delay   string `yaml:"delay,omitempty"`   // Wait before executing this step (e.g. "5s", "500ms")
+	Timeout string `yaml:"timeout,omitempty"` // HTTP request timeout (e.g. "4s", "100ms", "1m")
 
 	// Output
 	OutputFile string `yaml:"output_file,omitempty"` // Save response to file (e.g. "./output.json", "./image.png")
@@ -128,6 +130,7 @@ func (c *ConfigV1) Merge(step ChainStep) ConfigV1 {
 	m.Encoding = utils.Coalesce(step.Encoding, c.Encoding)
 	m.JQFilter = utils.Coalesce(step.JQFilter, c.JQFilter)
 	m.Delay = utils.Coalesce(step.Delay, c.Delay)
+	m.Timeout = utils.Coalesce(step.Timeout, c.Timeout)
 	m.OutputFile = utils.Coalesce(step.OutputFile, c.OutputFile)
 
 	// Bool/Int overrides
@@ -185,6 +188,7 @@ func (c *ConfigV1) MergeWithDefaults(defaults ConfigV1) ConfigV1 {
 	m.Encoding = utils.Coalesce(c.Encoding, defaults.Encoding)
 	m.JQFilter = utils.Coalesce(c.JQFilter, defaults.JQFilter)
 	m.Delay = utils.Coalesce(c.Delay, defaults.Delay)
+	m.Timeout = utils.Coalesce(c.Timeout, defaults.Timeout)
 	m.OutputFile = utils.Coalesce(c.OutputFile, defaults.OutputFile)
 
 	// Bool/Int overrides - file values take precedence
@@ -395,6 +399,10 @@ func (c *ConfigV1) enrichMetadata(req *domain.Request) error {
 
 	if c.OutputFile != "" {
 		req.Metadata["output_file"] = c.OutputFile
+	}
+
+	if c.Timeout != "" {
+		req.Metadata["timeout"] = c.Timeout
 	}
 
 	if c.Graphql != "" {

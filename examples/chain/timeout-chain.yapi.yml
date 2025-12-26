@@ -1,0 +1,30 @@
+# Test timeout in chained requests
+# Each step can have its own timeout
+yapi: v1
+
+# Global timeout that applies to all steps
+timeout: 5s
+
+chain:
+  # Step 1: Fast request with short timeout
+  - name: fast_step
+    url: https://httpbin.org/delay/1
+    method: GET
+    timeout: 3s
+    expect:
+      status: 200
+
+  # Step 2: Uses global timeout (5s)
+  - name: medium_step
+    url: https://httpbin.org/delay/2
+    method: GET
+    expect:
+      status: 200
+
+  # Step 3: Override with longer timeout
+  - name: slow_step
+    url: https://httpbin.org/delay/3
+    method: GET
+    timeout: 10s
+    expect:
+      status: 200
