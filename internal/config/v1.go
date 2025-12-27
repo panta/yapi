@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/url"
 	"sort"
 	"strings"
@@ -26,6 +27,7 @@ var knownV1Keys = map[string]bool{
 	"headers":          true,
 	"body":             true,
 	"json":             true,
+	"form":             true,
 	"query":            true,
 	"graphql":          true,
 	"variables":        true,
@@ -71,6 +73,7 @@ type ConfigV1 struct {
 	Headers        map[string]string `yaml:"headers,omitempty"`
 	Body           map[string]any    `yaml:"body,omitempty"`
 	JSON           string            `yaml:"json,omitempty"` // Raw JSON override
+	Form           map[string]string `yaml:"form,omitempty"` // Form data (application/x-www-form-urlencoded or multipart/form-data)
 	Query          map[string]string `yaml:"query,omitempty"`
 	Graphql        string            `yaml:"graphql,omitempty"`   // GraphQL query/mutation
 	Variables      map[string]any    `yaml:"variables,omitempty"` // GraphQL variables
@@ -329,12 +332,24 @@ func (c *ConfigV1) setDefaults() {
 	c.Method = constants.CanonicalizeMethod(c.Method)
 }
 
-// prepareBody processes the body/json fields and returns a reader, source identifier, and any error
+// prepareBody processes the body/json/form fields and returns a reader, source identifier, and any error
 func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
-	if c.JSON != "" && c.Body != nil && len(c.Body) > 0 {
-		return nil, "", fmt.Errorf("`body` and `json` are mutually exclusive")
+	// Check for mutually exclusive body fields
+	bodyFieldCount := 0
+	if c.JSON != "" {
+		bodyFieldCount++
+	}
+	if len(c.Body) > 0 {
+		bodyFieldCount++
+	}
+	if len(c.Form) > 0 {
+		bodyFieldCount++
+	}
+	if bodyFieldCount > 1 {
+		return nil, "", fmt.Errorf("`body`, `json`, and `form` are mutually exclusive")
 	}
 
+	// Handle JSON string
 	if c.JSON != "" {
 		if c.ContentType == "" {
 			c.ContentType = "application/json"
@@ -342,6 +357,7 @@ func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
 		return strings.NewReader(c.JSON), "json", nil
 	}
 
+	// Handle JSON object
 	if c.Body != nil {
 		bodyBytes, err := json.Marshal(c.Body)
 		if err != nil {
@@ -351,6 +367,41 @@ func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
 			c.ContentType = "application/json"
 		}
 		return bytes.NewReader(bodyBytes), "", nil
+	}
+
+	// Handle form data
+	if len(c.Form) > 0 {
+		// Default to urlencoded if no content type specified
+		if c.ContentType == "" {
+			c.ContentType = "application/x-www-form-urlencoded"
+		}
+
+		// Use multipart for multipart/form-data
+		if strings.Contains(c.ContentType, "multipart/form-data") {
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			for k, v := range c.Form {
+				if err := writer.WriteField(k, v); err != nil {
+					return nil, "", fmt.Errorf("failed to write form field %s: %w", k, err)
+				}
+			}
+
+			if err := writer.Close(); err != nil {
+				return nil, "", fmt.Errorf("failed to close multipart writer: %w", err)
+			}
+
+			// Update content type to include boundary
+			c.ContentType = writer.FormDataContentType()
+			return &buf, "form", nil
+		}
+
+		// Use URL encoding for urlencoded or unknown content types (fallback)
+		formValues := url.Values{}
+		for k, v := range c.Form {
+			formValues.Set(k, v)
+		}
+		return strings.NewReader(formValues.Encode()), "form", nil
 	}
 
 	return nil, "", nil
