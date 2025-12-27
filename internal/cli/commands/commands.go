@@ -150,8 +150,8 @@ var cmdManifest = []CommandSpec{
 	{
 		Use:     "about",
 		Aliases: []string{"ai", "brief"},
-		Short:   "Show LLM briefing for AI code agents",
-		Long:    "Display a comprehensive briefing document for LLM code agents working with yapi. Includes syntax, examples, and best practices.",
+		Short:   "Show comprehensive yapi developer guide",
+		Long:    "Display a comprehensive developer guide for working with yapi. Includes syntax, examples, best practices, and project organization patterns.",
 	},
 }
 

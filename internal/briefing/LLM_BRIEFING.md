@@ -1,4 +1,4 @@
-# yapi Briefing for LLM Code Agents
+# yapi Developer Guide
 
 ## What is yapi?
 
@@ -395,7 +395,7 @@ yapi stress workflow.yapi.yml -n 1000 -p 50
 yapi
 ```
 
-## Writing yapi Files as an LLM Agent
+## Best Practices for Writing yapi Files
 
 ### When Creating HTTP Request Files
 
@@ -516,7 +516,7 @@ expect:
     - .address.city != null
 ```
 
-## Tips for LLM Agents
+## Tips and Guidelines
 
 1. **Read existing patterns**: Before creating new request files, check existing ones in the project
 2. **Follow naming conventions**: Use descriptive names like `get-user.yapi.yml`, not `request1.yapi.yml`
@@ -563,7 +563,7 @@ When writing tests for CI/CD:
 
 ## Summary
 
-yapi is designed to make API testing version-controllable and automatable. As an LLM agent:
+yapi is designed to make API testing version-controllable and automatable. Key principles:
 
 - **Create structured, readable YAML files**
 - **Leverage environment configs for multi-environment support**
