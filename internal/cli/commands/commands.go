@@ -26,6 +26,7 @@ type Handlers struct {
 	Test           func(cmd *cobra.Command, args []string) error
 	List           func(cmd *cobra.Command, args []string) error
 	Stress         func(cmd *cobra.Command, args []string) error
+	About          func(cmd *cobra.Command, args []string) error
 }
 
 // BuildRoot builds the root command tree with optional handlers.
@@ -146,6 +147,12 @@ var cmdManifest = []CommandSpec{
 			{Name: "yes", Shorthand: "y", Type: "bool", Default: false, Usage: "Skip confirmation prompt"},
 		},
 	},
+	{
+		Use:     "about",
+		Aliases: []string{"ai", "brief"},
+		Short:   "Show LLM briefing for AI code agents",
+		Long:    "Display a comprehensive briefing document for LLM code agents working with yapi. Includes syntax, examples, and best practices.",
+	},
 }
 
 // getHandler maps command names to handlers
@@ -185,6 +192,8 @@ func getHandler(h *Handlers, use string) func(*cobra.Command, []string) error {
 		return h.List
 	case "stress":
 		return h.Stress
+	case "about":
+		return h.About
 	default:
 		return nil
 	}

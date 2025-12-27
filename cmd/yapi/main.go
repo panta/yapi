@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"yapi.run/cli/internal/briefing"
 	"yapi.run/cli/internal/cli/color"
 	"yapi.run/cli/internal/cli/commands"
 	"yapi.run/cli/internal/cli/middleware"
@@ -142,6 +143,7 @@ func main() {
 		Test:           app.testE,
 		List:           listE,
 		Stress:         app.stressE,
+		About:          aboutE,
 	}
 
 	rootCmd := commands.BuildRoot(cfg, handlers)
@@ -156,7 +158,7 @@ func main() {
 	rootCmd.PersistentPostRun = func(cmd *cobra.Command, args []string) {
 		// Log command to history (skip meta commands)
 		switch cmd.Name() {
-		case "history", "version", "lsp", "help", "yapi":
+		case "history", "version", "lsp", "help", "yapi", "about":
 			return
 		}
 		logHistoryCmd(reconstructCommand(cmd, args))
@@ -510,6 +512,11 @@ func versionE(cmd *cobra.Command, args []string) error {
 	fmt.Printf("yapi %s\n", version)
 	fmt.Printf("  commit: %s\n", commit)
 	fmt.Printf("  built:  %s\n", date)
+	return nil
+}
+
+func aboutE(cmd *cobra.Command, args []string) error {
+	fmt.Print(briefing.Content)
 	return nil
 }
 
